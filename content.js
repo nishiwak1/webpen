@@ -1,7 +1,4 @@
-
-// content.js
 (function() {
-  let socket;
   let canvas;
   let ctx;
   let drawing = false;
@@ -9,10 +6,17 @@
   let lastY = 0;
   let color = '#000000';
   let penSize = 3;
+  let sessionId = null;
+  let drawingsRef = null;
+  let myUserId = generateUserId();
   
-  // ページにキャンバスオーバーレイを追加
+  // ユーザーID生成
+  function generateUserId() {
+    return Math.random().toString(36).substring(2, 15);
+  }
+  
+  // キャンバスオーバーレイ作成
   function createCanvas() {
-    // すでに存在する場合は削除
     if (canvas) {
       document.body.removeChild(canvas);
     }
@@ -35,7 +39,7 @@
     setupEventListeners();
   }
   
-  // イベントリスナーを設定
+  // イベントリスナー設定
   function setupEventListeners() {
     canvas.addEventListener('mousedown', startDrawing);
     canvas.addEventListener('mousemove', draw);
@@ -62,17 +66,18 @@
     ctx.lineCap = 'round';
     ctx.stroke();
     
-    // 描画データをサーバーに送信
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({
-        type: 'draw',
-        from: lastX,
+    // 描画データを Firebase に送信
+    if (drawingsRef) {
+      drawingsRef.push({
+        userId: myUserId,
+        fromX: lastX,
         fromY: lastY,
         toX: e.clientX,
         toY: e.clientY,
         color: color,
-        penSize: penSize
-      }));
+        penSize: penSize,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+      });
     }
     
     lastX = e.clientX;
@@ -84,69 +89,98 @@
     drawing = false;
   }
   
-  // WebSocket接続を設定
-  function setupWebSocket(sessionId) {
-    // 実際のWebSocketサーバーのURLに置き換えてください
-    socket = new WebSocket(`wss://your-websocket-server.com/session/${sessionId}`);
+  // Firebase セッション設定
+  function setupFirebaseSession(newSessionId) {
+    sessionId = newSessionId;
     
-    socket.onopen = function() {
-      console.log('WebSocket接続が確立されました');
-    };
+    // 既存のリスナーをクリーンアップ
+    if (drawingsRef) {
+      drawingsRef.off();
+    }
     
-    socket.onmessage = function(event) {
-      const message = JSON.parse(event.data);
-      
-      if (message.type === 'draw') {
-        // 他のユーザーの描画を反映
+    // 新しいセッションの参照を取得
+    drawingsRef = firebase.database().ref(`sessions/${sessionId}/drawings`);
+    
+    // 以前のデータを読み込み
+    drawingsRef.once('value', (snapshot) => {
+      snapshot.forEach((childSnapshot) => {
+        const draw = childSnapshot.val();
+        if (draw.userId !== myUserId) { // 自分の描画ではない場合のみ
+          ctx.beginPath();
+          ctx.moveTo(draw.fromX, draw.fromY);
+          ctx.lineTo(draw.toX, draw.toY);
+          ctx.strokeStyle = draw.color;
+          ctx.lineWidth = draw.penSize;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+        }
+      });
+    });
+    
+    // 新しい描画をリッスン
+    drawingsRef.on('child_added', (snapshot) => {
+      const draw = snapshot.val();
+      // 自分の描画は既に表示されているので処理しない
+      if (draw.userId !== myUserId) {
         ctx.beginPath();
-        ctx.moveTo(message.fromX, message.fromY);
-        ctx.lineTo(message.toX, message.toY);
-        ctx.strokeStyle = message.color;
-        ctx.lineWidth = message.penSize;
+        ctx.moveTo(draw.fromX, draw.fromY);
+        ctx.lineTo(draw.toX, draw.toY);
+        ctx.strokeStyle = draw.color;
+        ctx.lineWidth = draw.penSize;
         ctx.lineCap = 'round';
         ctx.stroke();
-      } else if (message.type === 'clear') {
-        // キャンバスをクリア
+      }
+    });
+    
+    // クリアコマンドをリッスン
+    firebase.database().ref(`sessions/${sessionId}/commands`).on('child_added', (snapshot) => {
+      const command = snapshot.val();
+      if (command.type === 'clear' && command.userId !== myUserId) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
-    };
+    });
     
-    socket.onclose = function() {
-      console.log('WebSocket接続が閉じられました');
-    };
+    // 参加者リストに自分を追加
+    firebase.database().ref(`sessions/${sessionId}/participants/${myUserId}`).set({
+      joined: firebase.database.ServerValue.TIMESTAMP,
+      lastActive: firebase.database.ServerValue.TIMESTAMP
+    });
     
-    socket.onerror = function(error) {
-      console.error('WebSocketエラー:', error);
-    };
+    // 切断時に参加者リストから削除するための設定
+    firebase.database().ref(`sessions/${sessionId}/participants/${myUserId}`).onDisconnect().remove();
   }
   
-  // キャンバスをクリア
+  // キャンバスクリア
   function clearCanvas() {
     if (ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      // クリアコマンドをサーバーに送信
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          type: 'clear'
-        }));
+      // クリアコマンドを Firebase に送信
+      if (sessionId) {
+        firebase.database().ref(`sessions/${sessionId}/commands`).push({
+          type: 'clear',
+          userId: myUserId,
+          timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
       }
     }
   }
   
-  // 拡張機能のメッセージを処理
+  // 拡張機能からのメッセージを処理
   chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-    if (request.action === 'startSession' || request.action === 'joinSession') {
+    if (request.action === 'startSession') {
       createCanvas();
-      setupWebSocket(request.sessionId);
+      setupFirebaseSession(request.sessionId);
+    } else if (request.action === 'joinSession') {
+      createCanvas();
+      setupFirebaseSession(request.sessionId);
     } else if (request.action === 'endSession') {
       if (canvas) {
         document.body.removeChild(canvas);
         canvas = null;
       }
-      if (socket) {
-        socket.close();
-        socket = null;
+      if (drawingsRef) {
+        drawingsRef.off();
       }
     } else if (request.action === 'clearCanvas') {
       clearCanvas();
@@ -157,7 +191,7 @@
     }
   });
   
-  // ウィンドウサイズ変更時にキャンバスをリサイズ
+  // ウィンドウサイズ変更時
   window.addEventListener('resize', function() {
     if (canvas) {
       canvas.width = window.innerWidth;
@@ -172,17 +206,17 @@
   }
   
   // URLにセッションIDがある場合、自動的に参加
-  const sessionId = getSessionIdFromUrl();
-  if (sessionId) {
+  const urlSessionId = getSessionIdFromUrl();
+  if (urlSessionId) {
     chrome.storage.local.set({
       activeSession: true,
       isHost: false,
-      sessionId: sessionId,
+      sessionId: urlSessionId,
       color: '#000000',
       penSize: 3
     }, function() {
       createCanvas();
-      setupWebSocket(sessionId);
+      setupFirebaseSession(urlSessionId);
     });
   }
 })();

@@ -1,6 +1,5 @@
-
-// popup.js
 document.addEventListener('DOMContentLoaded', function() {
+  // 既存のDOM要素参照
   const startButton = document.getElementById('start-session');
   const joinButton = document.getElementById('join-session');
   const copyButton = document.getElementById('copy-url');
@@ -15,6 +14,13 @@ document.addEventListener('DOMContentLoaded', function() {
   // 新しいセッションを開始
   startButton.addEventListener('click', function() {
     const sessionId = generateSessionId();
+    
+    // Firebase にセッションデータ構造を作成
+    firebase.database().ref(`sessions/${sessionId}/info`).set({
+      created: firebase.database.ServerValue.TIMESTAMP,
+      lastActive: firebase.database.ServerValue.TIMESTAMP
+    });
+    
     chrome.storage.local.set({
       activeSession: true,
       isHost: true,
@@ -41,26 +47,39 @@ document.addEventListener('DOMContentLoaded', function() {
   joinButton.addEventListener('click', function() {
     const sessionId = document.getElementById('join-code').value.trim();
     if (sessionId) {
-      chrome.storage.local.set({
-        activeSession: true,
-        isHost: false,
-        sessionId: sessionId,
-        color: '#000000',
-        penSize: 3
-      }, function() {
-        startSection.style.display = 'none';
-        activeSection.style.display = 'block';
-        
-        // コンテンツスクリプトに通知
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-          chrome.tabs.sendMessage(tabs[0].id, {
-            action: 'joinSession',
-            sessionId: sessionId
+      // セッションの存在を確認
+      firebase.database().ref(`sessions/${sessionId}/info`).once('value', (snapshot) => {
+        if (snapshot.exists()) {
+          // セッションが存在する場合
+          chrome.storage.local.set({
+            activeSession: true,
+            isHost: false,
+            sessionId: sessionId,
+            color: '#000000',
+            penSize: 3
+          }, function() {
+            startSection.style.display = 'none';
+            activeSection.style.display = 'block';
+            sessionUrlInput.value = `${window.location.origin}?session=${sessionId}`;
+            
+            // コンテンツスクリプトに通知
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+              chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'joinSession',
+                sessionId: sessionId
+              });
+            });
           });
-        });
+        } else {
+          // セッションが存在しない場合
+          alert('セッションが見つかりません。セッションIDを確認してください。');
+        }
       });
     }
   });
+  
+  // 残りのイベントリスナー（コピー、クリア、セッション終了など）
+  // 以下は既存のコードとほぼ同じ
   
   // URLをクリップボードにコピー
   copyButton.addEventListener('click', function() {
@@ -79,14 +98,30 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // セッション終了
   endButton.addEventListener('click', function() {
-    chrome.storage.local.set({activeSession: false}, function() {
-      startSection.style.display = 'block';
-      activeSection.style.display = 'none';
+    chrome.storage.local.get(['sessionId'], function(data) {
+      const sessionId = data.sessionId;
+      if (sessionId) {
+        // ホストの場合のみセッションデータを削除
+        chrome.storage.local.get(['isHost'], function(data) {
+          if (data.isHost) {
+            // 30分後にセッションを削除する（オプション）
+            const deleteTime = new Date();
+            deleteTime.setMinutes(deleteTime.getMinutes() + 30);
+            firebase.database().ref(`sessions/${sessionId}/info/scheduledDelete`).set(deleteTime.getTime());
+          }
+        });
+      }
       
-      // コンテンツスクリプトに通知
-      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, {
-          action: 'endSession'
+      // ローカルのセッション状態をリセット
+      chrome.storage.local.set({activeSession: false}, function() {
+        startSection.style.display = 'block';
+        activeSection.style.display = 'none';
+        
+        // コンテンツスクリプトに通知
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: 'endSession'
+          });
         });
       });
     });
