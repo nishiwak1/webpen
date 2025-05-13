@@ -1,0 +1,18 @@
+# 依存関係
+node_modules/
+
+# 環境設定ファイル
+.env
+
+# ログファイル
+*.log
+
+# OS生成ファイル
+.DS_Store
+Thumbs.db
+
+# IDEやエディタの設定
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
