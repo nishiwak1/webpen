@@ -34,7 +34,16 @@
       height: 30px;
       border-radius: 50%;
       cursor: pointer;
-    }
+      border: 2px solid transparent;
+      box-shadow: none;
+      transition: box-shadow 0.2s ease, border 0.2s ease;
+  }
+
+/* 選択された色のスタイル（activeクラスで切り替える） */
+  .color.selected {
+    box-shadow: 0 0 0 3px #999, 0 0 0 6px white; /* 外側に二重線のような効果 */
+  }
+
     .thickness {
       margin: 10px 0;
     }
