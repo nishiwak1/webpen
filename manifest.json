@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "共有お絵描き",
+  "version": "1.0",
+  "description": "8桁コードで他のユーザーとリアルタイムお絵描き共有",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["control-bar.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_title": "共有お絵描き"
+  }
+}

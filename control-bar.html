@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      color: white;
+      overflow: hidden;
+      background: transparent;
+    }
+    
+    .bar-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      width: 100%;
+      height: 100%;
+      padding: 0 15px;
+      pointer-events: auto;
+    }
+    
+    .bar-container.minimized {
+      justify-content: space-between;
+    }
+    
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .logo-icon {
+      font-size: 18px;
+    }
+    
+    .logo-text {
+      font-weight: bold;
+      font-size: 14px;
+    }
+    
+    .minimized .logo-text {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    
+    .room-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.1);
+      padding: 5px 10px;
+      border-radius: 20px;
+      pointer-events: auto;
+    }
+    
+    .room-label {
+      font-size: 12px;
+    }
+    
+    .room-code {
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    
+    .room-input {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 10px;
+      width: 80px;
+      text-align: center;
+      font-size: 12px;
+      pointer-events: auto;
+      outline: none;
+    }
+    
+    .room-input::placeholder {
+      color: rgba(255,255,255,0.7);
+    }
+    
+    .btn {
+      border: none;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 10px;
+      pointer-events: auto;
+      transition: opacity 0.2s;
+    }
+    
+    .btn:hover {
+      opacity: 0.8;
+    }
+    
+    .btn-join { background: #4CAF50; }
+    .btn-create { background: #2196F3; }
+    .btn-leave { background: #ff6b6b; }
+    .btn-toggle-on { background: #4CAF50; }
+    .btn-toggle-off { background: #ff6b6b; }
+    .btn-clear { background: #ff9800; }
+    .btn-minimize { background: rgba(255,255,255,0.2); }
+    .btn-expand { 
+      background: rgba(255,255,255,0.2);
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    
+    .color-section {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      pointer-events: auto;
+    }
+    
+    .color-label {
+      font-size: 10px;
+    }
+    
+    .color-palette {
+      display: flex;
+      gap: 3px;
+    }
+    
+    .color-btn {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: transform 0.2s;
+    }
+    
+    .color-btn:hover {
+      transform: scale(1.1);
+    }
+    
+    .color-btn.active {
+      border-color: white;
+    }
+    
+    .spacer {
+      flex: 1;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- 展開状態 -->
+  <div id="expanded-content" class="bar-container">
+    <div class="logo">
+      <span class="logo-icon">🎨</span>
+      <span class="logo-text">共有お絵描き</span>
+    </div>
+    
+    <!-- 部屋なし状態 -->
+    <div id="room-join" class="room-section">
+      <input type="text" id="room-input" class="room-input" placeholder="8桁コード" maxlength="8">
+      <button id="join-btn" class="btn btn-join">参加</button>
+      <button id="create-btn" class="btn btn-create">新規</button>
+    </div>
+    
+    <!-- 部屋あり状態 -->
+    <div id="room-current" class="room-section hidden">
+      <span class="room-label">部屋:</span>
+      <span id="current-room-code" class="room-code"></span>
+      <button id="leave-btn" class="btn btn-leave">退出</button>
+    </div>
+    
+    <div class="color-section">
+      <span class="color-label">色:</span>
+      <div class="color-palette">
+        <div class="color-btn active" data-color="#000000" style="background: #000000;"></div>
+        <div class="color-btn" data-color="#ff0000" style="background: #ff0000;"></div>
+        <div class="color-btn" data-color="#00ff00" style="background: #00ff00;"></div>
+        <div class="color-btn" data-color="#0000ff" style="background: #0000ff;"></div>
+        <div class="color-btn" data-color="#ffff00" style="background: #ffff00;"></div>
+        <div class="color-btn" data-color="#ff00ff" style="background: #ff00ff;"></div>
+      </div>
+    </div>
+    
+    <button id="toggle-draw-btn" class="btn btn-toggle-on">描画: ON</button>
+    <button id="clear-btn" class="btn btn-clear">クリア</button>
+    
+    <div class="spacer"></div>
+    
+    <button id="minimize-btn" class="btn btn-minimize">最小化</button>
+  </div>
+  
+  <!-- 最小化状態 -->
+  <div id="minimized-content" class="bar-container minimized hidden">
+    <div class="logo">
+      <span class="logo-icon">🎨</span>
+      <span class="logo-text">共有お絵描き</span>
+    </div>
+    <button id="expand-btn" class="btn btn-expand">展開</button>
+  </div>
+</body>
+</html>
