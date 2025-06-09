@@ -3,6 +3,11 @@
   "name": "共有お絵描き",
   "version": "1.0",
   "description": "8桁コードで他のユーザーとリアルタイムお絵描き共有",
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
   "permissions": [
     "activeTab",
     "storage",
