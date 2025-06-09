@@ -28,10 +28,6 @@
       pointer-events: auto;
     }
     
-    .bar-container.minimized {
-      justify-content: space-between;
-    }
-    
     .logo {
       display: flex;
       align-items: center;
@@ -45,11 +41,6 @@
     .logo-text {
       font-weight: bold;
       font-size: 14px;
-    }
-    
-    .minimized .logo-text {
-      font-size: 12px;
-      opacity: 0.8;
     }
     
     .room-section {
@@ -110,12 +101,6 @@
     .btn-toggle-off { background: #ff6b6b; }
     .btn-clear { background: #ff9800; }
     .btn-minimize { background: rgba(255,255,255,0.2); }
-    .btn-expand { 
-      background: rgba(255,255,255,0.2);
-      padding: 2px 8px;
-      border-radius: 3px;
-      font-size: 12px;
-    }
     
     .color-section {
       display: flex;
@@ -200,15 +185,6 @@
     <div class="spacer"></div>
     
     <button id="minimize-btn" class="btn btn-minimize">最小化</button>
-  </div>
-  
-  <!-- 最小化状態 -->
-  <div id="minimized-content" class="bar-container minimized hidden">
-    <div class="logo">
-      <span class="logo-icon">🎨</span>
-      <span class="logo-text">共有お絵描き</span>
-    </div>
-    <button id="expand-btn" class="btn btn-expand">展開</button>
   </div>
 </body>
 </html>

@@ -62,6 +62,16 @@ class SharedDrawing {
       existingBar.remove();
     }
 
+    // 最小化状態では何も表示しない
+    if (!this.isBarVisible) {
+      console.log('最小化状態のため、バーを非表示にします');
+      // ページのpadding-topを元に戻す
+      if (document.body) {
+        document.body.style.paddingTop = '';
+      }
+      return;
+    }
+
     // bodyが存在するか確認
     if (!document.body) {
       console.log('document.bodyが存在しません。再試行します...');
@@ -69,7 +79,7 @@ class SharedDrawing {
       return;
     }
 
-    // コントロールバーを作成
+    // コントロールバーを作成（展開状態のみ）
     this.controlBar = document.createElement('div');
     this.controlBar.id = 'shared-drawing-control-bar';
     
@@ -79,7 +89,7 @@ class SharedDrawing {
       left: 0 !important;
       right: 0 !important;
       width: 100% !important;
-      height: ${this.isBarVisible ? '60px' : '20px'} !important;
+      height: 60px !important;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
       border-bottom: 1px solid rgba(255,255,255,0.2) !important;
       z-index: 2147483647 !important;
@@ -100,11 +110,9 @@ class SharedDrawing {
     document.body.insertBefore(this.controlBar, document.body.firstChild);
     
     // ページのコンテンツを下にずらす
-    if (!document.body.style.paddingTop) {
-      document.body.style.paddingTop = this.isBarVisible ? '60px' : '20px';
-    }
+    document.body.style.paddingTop = '60px';
     
-    console.log('コントロールバーを作成しました');
+    console.log('コントロールバーを作成しました（展開状態）');
   }
 
   async loadBarContent() {
@@ -149,15 +157,21 @@ class SharedDrawing {
   updateBarState() {
     console.log('=== updateBarState デバッグ開始 ===');
     console.log('this.controlBar存在:', !!this.controlBar);
+    console.log('isBarVisible:', this.isBarVisible);
+    
+    // 最小化状態では何もしない（バー自体が存在しない）
+    if (!this.isBarVisible) {
+      console.log('最小化状態のため、バー更新をスキップします');
+      return;
+    }
     
     if (!this.controlBar || !this.controlBar.innerHTML) {
         console.error('updateBarState: controlBarまたはHTMLが存在しません');
         return;
     }
     
-    // 変数を一度だけ宣言
+    // 展開状態でのみ要素を更新
     const expandedContent = this.controlBar.querySelector('#expanded-content');
-    const minimizedContent = this.controlBar.querySelector('#minimized-content');
     const roomJoin = this.controlBar.querySelector('#room-join');
     const roomCurrent = this.controlBar.querySelector('#room-current');
     const currentRoomCode = this.controlBar.querySelector('#current-room-code');
@@ -165,25 +179,18 @@ class SharedDrawing {
     
     console.log('要素チェック:', {
         expandedContent: !!expandedContent,
-        minimizedContent: !!minimizedContent,
         roomJoin: !!roomJoin,
         roomCurrent: !!roomCurrent,
         toggleBtn: !!toggleBtn
     });
     
-    if (!expandedContent || !minimizedContent) {
-        console.log('必要な要素が見つかりません');
+    if (!expandedContent) {
+        console.log('展開コンテンツが見つかりません');
         return;
     }
     
-    // 展開/最小化の表示切り替え
-    if (this.isBarVisible) {
-        expandedContent.classList.remove('hidden');
-        minimizedContent.classList.add('hidden');
-    } else {
-        expandedContent.classList.add('hidden');
-        minimizedContent.classList.remove('hidden');
-    }
+    // 展開状態では常に表示
+    expandedContent.classList.remove('hidden');
     
     // 部屋状態の表示切り替え
     if (roomJoin && roomCurrent) {
@@ -219,17 +226,17 @@ class SharedDrawing {
       existingCanvas.remove();
     }
 
-    // 新しいキャンバスを作成
+    // 最小化状態でも描画キャンバスは表示（描画機能は継続）
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'shared-drawing-canvas';
     
     // CSSスタイルを直接適用
     const canvasStyles = `
       position: fixed !important;
-      top: ${this.isBarVisible ? '60px' : '20px'} !important;
+      top: ${this.isBarVisible ? '60px' : '0px'} !important;
       left: 0 !important;
       width: 100vw !important;
-      height: calc(100vh - ${this.isBarVisible ? '60px' : '20px'}) !important;
+      height: ${this.isBarVisible ? 'calc(100vh - 60px)' : '100vh'} !important;
       z-index: 2147483647 !important;
       pointer-events: ${this.isEnabled ? 'auto' : 'none'} !important;
       background: transparent !important;
@@ -246,7 +253,7 @@ class SharedDrawing {
 
     // キャンバスサイズを設定
     this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight - (this.isBarVisible ? 60 : 20);
+    this.canvas.height = window.innerHeight - (this.isBarVisible ? 60 : 0);
 
     this.ctx = this.canvas.getContext('2d');
     this.ctx.lineCap = 'round';
@@ -259,7 +266,7 @@ class SharedDrawing {
     // ウィンドウリサイズ時の処理
     window.addEventListener('resize', () => {
       this.canvas.width = window.innerWidth;
-      this.canvas.height = window.innerHeight - (this.isBarVisible ? 60 : 20);
+      this.canvas.height = window.innerHeight - (this.isBarVisible ? 60 : 0);
       this.ctx.lineCap = 'round';
       this.ctx.lineJoin = 'round';
       this.ctx.lineWidth = 3;
@@ -274,7 +281,7 @@ class SharedDrawing {
     this.canvas.addEventListener('mouseup', () => this.stopDrawing());
     this.canvas.addEventListener('mouseout', () => this.stopDrawing());
 
-    // キーボードショートカット
+    // キーボードショートカット（必要最小限）
     document.addEventListener('keydown', (e) => {
       // Ctrl+Shift+D で描画モード切り替え
       if (e.ctrlKey && e.shiftKey && e.key === 'D') {
@@ -295,20 +302,31 @@ class SharedDrawing {
 
     // Chrome拡張機能のメッセージリスナー
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log('📨 メッセージを受信:', message.type, message);
+      
       switch (message.type) {
         case 'TOGGLE_BAR_VISIBILITY':
+          console.log('🔄 バー表示切り替え:', message.visible);
           this.toggleBarVisibility(message.visible);
+          sendResponse({ success: true, newState: message.visible });
           break;
         case 'TOGGLE_DRAWING':
           this.toggleDrawing(message.isDrawing);
+          sendResponse({ success: true });
           break;
         case 'CLEAR_CANVAS':
           this.clearCanvas();
+          sendResponse({ success: true });
           break;
         case 'CHANGE_COLOR':
           this.changeColor(message.color);
+          sendResponse({ success: true });
           break;
+        default:
+          console.log('❓ 未知のメッセージタイプ:', message.type);
       }
+      
+      return true; // 非同期レスポンスを送信
     });
   }
 
@@ -316,18 +334,14 @@ class SharedDrawing {
     const self = this;
     console.log('イベントリスナーを設定中...');
     
-    // 展開/最小化ボタン
-    const expandBtn = self.controlBar.querySelector('#expand-btn');
-    const minimizeBtn = self.controlBar.querySelector('#minimize-btn');
-    
-    if (expandBtn) {
-        expandBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('展開ボタンがクリックされました');
-            self.toggleBarVisibility(true);
-        });
+    // 最小化状態ではイベントリスナーを設定しない
+    if (!this.isBarVisible || !this.controlBar) {
+      console.log('最小化状態のため、イベントリスナー設定をスキップします');
+      return;
     }
+    
+    // 最小化ボタン（展開状態でのみ表示）
+    const minimizeBtn = self.controlBar.querySelector('#minimize-btn');
     
     if (minimizeBtn) {
         minimizeBtn.addEventListener('click', (e) => {
@@ -654,16 +668,11 @@ class SharedDrawing {
     this.isBarVisible = visible;
     await chrome.storage.local.set({ isBarVisible: visible });
     
-    if (this.controlBar) {
-        this.controlBar.style.height = visible ? '60px' : '20px';
-    }
+    // バーとキャンバスを再作成
+    this.createControlBar();
+    this.createCanvas();
     
-    if (document.body) {
-        document.body.style.paddingTop = visible ? '60px' : '20px';
-    }
-    
-    this.updateBarState();
-    console.log(`バー表示: ${visible ? '展開' : '最小化'}`);
+    console.log(`バー表示: ${visible ? '展開' : '最小化（完全非表示）'}`);
   }
 
   generateRoomCode() {
