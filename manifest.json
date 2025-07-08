@@ -1,36 +1,40 @@
 {
   "manifest_version": 3,
-  "name": "コラボラクガキ",
+  "name": "共有お絵描き",
   "version": "1.0",
-  "description": "ウェブページ上で友達と一緒にラクガキができる拡張機能",
-  "permissions": ["activeTab", "storage", "scripting"],
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "images/icon16.png",
-      "48": "images/icon48.png",
-      "128": "images/icon128.png"
-    }
+  "description": "8桁コードで他のユーザーとリアルタイムお絵描き共有",
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
   },
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": [
-        "firebase-app.js",
-        "firebase-database.js",
-        "firebase-config.js",
-        "content.js"
-      ],
-      "css": ["overlay.css"]
+      "js": ["websocket.js", "canvas.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["canvas.html", "canvas.js"],
+      "resources": ["control-bar.html","images/pencil-cursor.png"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "action": {
+    "default_title": "共有お絵描き"
+  }
 }

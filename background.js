@@ -1,18 +1,66 @@
+// バックグラウンドサービスワーカー
+console.log('background.js 読み込み開始');
+
+// 拡張機能インストール時
 chrome.runtime.onInstalled.addListener(() => {
+  console.log('拡張機能がインストールされました');
+  
   chrome.storage.local.set({
-    activeSession: false,
-    isHost: false,
-    sessionId: null,
-    color: '#000000',
-    penSize: 3
+    isDrawing: true,
+    currentColor: '#000000',
+    isBarVisible: false
   });
 });
 
-// ブラウザ終了時にセッションから退出
-chrome.runtime.onSuspend.addListener(() => {
-  chrome.storage.local.get(['activeSession', 'sessionId'], function(data) {
-    if (data.activeSession && data.sessionId) {
-      // Firebase のセッションから退出（オプション）
+// 拡張機能アイコンクリック時
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log('拡張機能アイコンがクリックされました - tabId:', tab.id);
+  
+  try {
+    // まずコンテンツスクリプトが注入されているか確認
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'PING' });
+      console.log('コンテンツスクリプトは既に注入されています');
+    } catch (e) {
+      console.log('コンテンツスクリプトを注入します');
+      // コンテンツスクリプトを注入
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+      });
+      
+      // CSSも注入（必要な場合）
+      await chrome.scripting.insertCSS({
+        target: { tabId: tab.id },
+        files: ['styles.css']
+      });
+      
+      // 少し待機（注入完了を確実にするため）
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
-  });
+    
+    // 現在の状態を取得
+    const result = await chrome.storage.local.get(['isBarVisible']);
+    const newVisibility = !result.isBarVisible;
+    console.log('状態変更:', result.isBarVisible, '->', newVisibility);
+    
+    // 新しい状態を保存
+    await chrome.storage.local.set({ isBarVisible: newVisibility });
+    
+    // コンテンツスクリプトに通知
+    await chrome.tabs.sendMessage(tab.id, {
+      type: 'TOGGLE_BAR_VISIBILITY',
+      visible: newVisibility
+    });
+    
+    console.log('メッセージ送信完了');
+    
+  } catch (error) {
+    console.error('エラー:', error);
+    // エラー時はリロード
+    await chrome.storage.local.set({ isBarVisible: true });
+    chrome.tabs.reload(tab.id);
+  }
 });
+
+console.log('background.js 読み込み完了');
