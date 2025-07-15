@@ -7,6 +7,7 @@ class SharedDrawing {
     this.currentRoom = null;
     this.userCount = 0;
     this.isInitialized = false;
+    this.currentPenSize = 4;
     
     // WebSocketマネージャーを初期化
     this.wsManager = new WebSocketManager(
@@ -60,6 +61,10 @@ class SharedDrawing {
         
         this.isInitialized = true;
       }, 500);
+
+      // ペンサイズ設定を読み込み
+    this.currentPenSize = result.currentPenSize || 4;
+    this.canvasManager.setPenSize(this.currentPenSize);
       
     } catch (error) {
       console.error('初期化エラー:', error);
@@ -194,6 +199,12 @@ class SharedDrawing {
     colorBtns.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.color === this.canvasManager.currentColor);
     });
+
+    // ペンサイズボタンの状態更新
+    const penSizeBtns = this.controlBar.querySelectorAll('.pen-size-btn');
+    penSizeBtns.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.size == this.currentPenSize);
+    });
   }
   updateBodyPadding() {
     if (!document.body) return;
@@ -314,6 +325,26 @@ class SharedDrawing {
         self.clearCanvas();
       });
     }
+
+    // ペンサイズボタンのイベントリスナー
+    const penSizeBtns = self.controlBar.querySelectorAll('.pen-size-btn');
+    penSizeBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        self.changePenSize(parseInt(btn.dataset.size));
+      });
+    });
+
+    
+  }
+
+  // ペンサイズ変更メソッド
+  async changePenSize(size) {
+    this.currentPenSize = size;
+    this.canvasManager.setPenSize(size);
+    await chrome.storage.local.set({ currentPenSize: size });
+    this.updateBarState();
   }
 
   setupChromeListeners() {
@@ -338,6 +369,10 @@ class SharedDrawing {
         case 'CHANGE_OPACITY':
           this.changeOpacity(message.opacity);
           break;
+        case 'CHANGE_PEN_SIZE':
+          this.changePenSize(message.size);
+          break;
+        
       }
     });
   }
@@ -359,6 +394,7 @@ class SharedDrawing {
         points: drawData.stroke.points,
         color: drawData.stroke.color,
         opacity: drawData.stroke.opacity,
+        penSize: drawData.stroke.penSize || this.currentPenSize,
         startTime: drawData.stroke.startTime
       };
       console.log('送信データ:', payload);
@@ -409,7 +445,8 @@ class SharedDrawing {
               strokeData.points[i-1], 
               strokeData.points[i], 
               strokeData.color || '#000000',
-              strokeData.opacity !== undefined ? strokeData.opacity : 1.0
+              strokeData.opacity !== undefined ? strokeData.opacity : 1.0,
+              strokeData.penSize || 4
             );
           }
           console.log('線描画完了');

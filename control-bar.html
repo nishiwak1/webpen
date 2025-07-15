@@ -136,6 +136,78 @@
       border-color: white;
     }
     
+    /* ペンの太さ選択セクション */
+    .pen-size-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    
+    .pen-size-label {
+      font-size: 10px;
+    }
+    
+    .pen-size-options {
+      display: flex;
+      gap: 6px;
+    }
+    
+    .pen-size-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.2);
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    
+    .pen-size-btn:hover {
+      transform: scale(1.1);
+      border-color: rgba(255,255,255,0.6);
+    }
+    
+    .pen-size-btn.active {
+      border-color: white;
+      background: rgba(255,255,255,0.3);
+    }
+    
+    .pen-size-dot {
+      background: white;
+      border-radius: 50%;
+    }
+    
+    .pen-size-btn[data-size="2"] .pen-size-dot {
+      width: 2px;
+      height: 2px;
+    }
+    
+    .pen-size-btn[data-size="4"] .pen-size-dot {
+      width: 4px;
+      height: 4px;
+    }
+    
+    .pen-size-btn[data-size="8"] .pen-size-dot {
+      width: 8px;
+      height: 8px;
+    }
+    
+    .pen-size-btn[data-size="12"] .pen-size-dot {
+      width: 12px;
+      height: 12px;
+    }
+    
+    .pen-size-btn[data-size="16"] .pen-size-dot {
+      width: 16px;
+      height: 16px;
+    }
+    
     .spacer {
       flex: 1;
     }
@@ -144,7 +216,54 @@
       display: none !important;
     }
     
-    /* 最小化状態用のスタイルを追加 */
+    /* 透明度スライダー */
+    .opacity-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    
+    .opacity-label {
+      font-size: 10px;
+    }
+    
+    .opacity-slider {
+      width: 60px;
+      height: 20px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255,255,255,0.2);
+      border-radius: 10px;
+      outline: none;
+      pointer-events: auto;
+    }
+    
+    .opacity-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    
+    .opacity-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+    
+    .opacity-value {
+      font-size: 10px;
+      min-width: 30px;
+    }
+    
+    /* 最小化状態用のスタイル */
     .minimized-content {
       display: flex;
       align-items: center;
@@ -173,6 +292,7 @@
 <body>
   <!-- 最小化状態 -->
   <div id="minimized-content" class="minimized-content hidden">
+    <button id="expand-btn" class="expand-btn">展開</button>
   </div>
 
   <!-- 展開状態 -->
@@ -208,6 +328,35 @@
       </div>
     </div>
     
+    <!-- ペンの太さ選択セクション -->
+    <div class="pen-size-section">
+      <span class="pen-size-label">太さ:</span>
+      <div class="pen-size-options">
+        <div class="pen-size-btn" data-size="2" title="細い">
+          <div class="pen-size-dot"></div>
+        </div>
+        <div class="pen-size-btn active" data-size="4" title="普通">
+          <div class="pen-size-dot"></div>
+        </div>
+        <div class="pen-size-btn" data-size="8" title="太い">
+          <div class="pen-size-dot"></div>
+        </div>
+        <div class="pen-size-btn" data-size="12" title="とても太い">
+          <div class="pen-size-dot"></div>
+        </div>
+        <div class="pen-size-btn" data-size="16" title="最も太い">
+          <div class="pen-size-dot"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 透明度スライダー -->
+    <div class="opacity-section">
+      <span class="opacity-label">透明度:</span>
+      <input type="range" id="opacity-slider" class="opacity-slider" min="0.1" max="1" step="0.1" value="0.7">
+      <span id="opacity-value" class="opacity-value">70%</span>
+    </div>
+    
     <button id="toggle-draw-btn" class="btn btn-toggle-on">描画: ON</button>
     <button id="clear-btn" class="btn btn-clear">クリア</button>
     
@@ -215,5 +364,180 @@
     
     <button id="minimize-btn" class="btn btn-minimize">最小化</button>
   </div>
+
+  <script>
+    // デモ用のJavaScript（実際の機能）
+    let currentPenSize = 4;
+    let currentColor = '#000000';
+    let currentOpacity = 0.7;
+    let isDrawing = true;
+    let isBarVisible = true;
+    
+    // ペンサイズの変更
+    function changePenSize(size) {
+      currentPenSize = size;
+      console.log('ペンサイズ変更:', size);
+      
+      // ボタンの状態を更新
+      document.querySelectorAll('.pen-size-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.size == size);
+      });
+    }
+    
+    // 色の変更
+    function changeColor(color) {
+      currentColor = color;
+      console.log('色変更:', color);
+      
+      // ボタンの状態を更新
+      document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.color === color);
+      });
+    }
+    
+    // 透明度の変更
+    function changeOpacity(opacity) {
+      currentOpacity = opacity;
+      console.log('透明度変更:', opacity);
+      
+      // 表示を更新
+      const opacityValue = document.querySelector('#opacity-value');
+      if (opacityValue) {
+        opacityValue.textContent = Math.round(opacity * 100) + '%';
+      }
+    }
+    
+    // 描画の切り替え
+    function toggleDrawing() {
+      isDrawing = !isDrawing;
+      console.log('描画切り替え:', isDrawing);
+      
+      const toggleBtn = document.querySelector('#toggle-draw-btn');
+      if (toggleBtn) {
+        toggleBtn.textContent = `描画: ${isDrawing ? 'ON' : 'OFF'}`;
+        toggleBtn.className = `btn ${isDrawing ? 'btn-toggle-on' : 'btn-toggle-off'}`;
+      }
+    }
+    
+    // バーの表示/非表示切り替え
+    function toggleBarVisibility() {
+      isBarVisible = !isBarVisible;
+      console.log('バー表示切り替え:', isBarVisible);
+      
+      const expandedContent = document.querySelector('#expanded-content');
+      const minimizedContent = document.querySelector('#minimized-content');
+      
+      if (isBarVisible) {
+        expandedContent.classList.remove('hidden');
+        minimizedContent.classList.add('hidden');
+      } else {
+        expandedContent.classList.add('hidden');
+        minimizedContent.classList.remove('hidden');
+      }
+    }
+    
+    // イベントリスナーの設定
+    document.addEventListener('DOMContentLoaded', function() {
+      // ペンサイズボタン
+      document.querySelectorAll('.pen-size-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          changePenSize(parseInt(btn.dataset.size));
+        });
+      });
+      
+      // 色ボタン
+      document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          changeColor(btn.dataset.color);
+        });
+      });
+      
+      // 透明度スライダー
+      const opacitySlider = document.querySelector('#opacity-slider');
+      if (opacitySlider) {
+        opacitySlider.addEventListener('input', (e) => {
+          e.stopPropagation();
+          changeOpacity(parseFloat(e.target.value));
+        });
+      }
+      
+      // 描画切り替えボタン
+      const toggleDrawBtn = document.querySelector('#toggle-draw-btn');
+      if (toggleDrawBtn) {
+        toggleDrawBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleDrawing();
+        });
+      }
+      
+      // 最小化/展開ボタン
+      const minimizeBtn = document.querySelector('#minimize-btn');
+      if (minimizeBtn) {
+        minimizeBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleBarVisibility();
+        });
+      }
+      
+      const expandBtn = document.querySelector('#expand-btn');
+      if (expandBtn) {
+        expandBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleBarVisibility();
+        });
+      }
+      
+      // キャンバスクリアボタン
+      const clearBtn = document.querySelector('#clear-btn');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('キャンバスクリア');
+        });
+      }
+      
+      // 部屋作成ボタン
+      const createBtn = document.querySelector('#create-btn');
+      if (createBtn) {
+        createBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('新しい部屋を作成');
+        });
+      }
+      
+      // 部屋参加ボタン
+      const joinBtn = document.querySelector('#join-btn');
+      if (joinBtn) {
+        joinBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const roomInput = document.querySelector('#room-input');
+          const code = roomInput ? roomInput.value.trim() : '';
+          console.log('部屋に参加:', code);
+        });
+      }
+      
+      // 部屋退出ボタン
+      const leaveBtn = document.querySelector('#leave-btn');
+      if (leaveBtn) {
+        leaveBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('部屋から退出');
+        });
+      }
+      
+      console.log('お絵描きUI初期化完了');
+    });
+  </script>
 </body>
 </html>

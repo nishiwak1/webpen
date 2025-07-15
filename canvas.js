@@ -7,6 +7,7 @@ class CanvasManager {
     this.isEnabled = true;
     this.currentColor = '#000000';
     this.currentOpacity = 0.7;
+    this.currentPenSize = 4;
     this.lastPos = { x: 0, y: 0 };
     this.onDraw = onDrawCallback;
     this.currentStroke = null; // 追加
@@ -50,6 +51,15 @@ class CanvasManager {
     // リサイズイベント
     window.addEventListener('resize', () => this.resize(isBarVisible));
   }
+
+  setPenSize(size) {
+    this.currentPenSize = size;
+    if (this.ctx) {
+      this.ctx.lineWidth = size;
+    }
+  }
+
+  
 
   resize(isBarVisible) {
     this.canvas.width = window.innerWidth;
@@ -221,12 +231,13 @@ class CanvasManager {
     }
   }
 
-  drawLine(from, to, color, opacity = 1.0) {
+  drawLine(from, to, color, opacity = 1.0,penSize) {
     const previousAlpha = this.ctx.globalAlpha;
     const previousStroke = this.ctx.strokeStyle;
     
     this.ctx.strokeStyle = color;
     this.ctx.globalAlpha = opacity;
+    this.ctx.lineWidth = penSize || this.currentPenSize; 
     this.ctx.beginPath();
     this.ctx.moveTo(from.x, from.y);
     this.ctx.lineTo(to.x, to.y);
