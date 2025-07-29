@@ -310,7 +310,6 @@ class SharedDrawing {
       this.hideBar();
     }
 
-    this.canvasManager.updatePosition(visible);
     this.updateBodyPadding();
   }
 
@@ -355,7 +354,6 @@ class SharedDrawing {
         }
       }
 
-      this.canvasManager.updatePosition(isBarVisible);
       this.updateBodyPadding();
 
       // バーが存在する場合のみ状態更新

@@ -12,6 +12,14 @@ class CanvasManager {
     this.currentStroke = null; // 追加
   }
 
+  updatePosition(isBarVisible) {
+    if (this.canvas) {
+      this.canvas.style.top = isBarVisible ? '60px' : '0px';
+      this.canvas.style.height = isBarVisible ? 'calc(100vh - 60px)' : '100vh';
+      this.resize(isBarVisible);
+    }
+  }
+
   create(isBarVisible = true) {
     // 既存のキャンバスを削除
     const existingCanvas = document.getElementById('shared-drawing-canvas');
@@ -22,7 +30,7 @@ class CanvasManager {
     // 新しいキャンバスを作成
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'shared-drawing-canvas';
-    
+
     const canvasStyles = `
       position: fixed !important;
       top: ${isBarVisible ? '60px' : '0px'} !important;
@@ -68,56 +76,55 @@ class CanvasManager {
   setupEventListeners() {
     let longPressTimer = null;
     let isLongPressActive = false;
-    const LONG_PRESS_DURATION = 300;
-  
+    const LONG_PRESS_DURATION = 30;
+
     // マウスイベント
     document.addEventListener('mousedown', (e) => {
       if (!this.isEnabled) return;
-      
+
       longPressTimer = setTimeout(() => {
         isLongPressActive = true;
-        
+
         // 描画モード突入：この瞬間だけキャンバスをアクティブ化
         this.canvas.style.pointerEvents = 'auto';
         document.body.style.overflow = 'hidden';
-        
+
         this.startDrawing(e);
       }, LONG_PRESS_DURATION);
     });
-  
+
     document.addEventListener('mousemove', (e) => {
       if (isLongPressActive && this.isDrawing) {
         this.draw(e);
       }
     });
-  
+
     document.addEventListener('mouseup', () => {
       clearTimeout(longPressTimer);
       if (isLongPressActive) {
         this.stopDrawing();
-        this.exitDrawingMode();
         isLongPressActive = false;
       }
     });
-  
+
     // タッチイベント
     document.addEventListener('touchstart', (e) => {
       if (!this.isEnabled) return;
-      
+
       longPressTimer = setTimeout(() => {
         isLongPressActive = true;
-        
+
         // 描画モード突入
         this.canvas.style.pointerEvents = 'auto';
         document.body.style.overflow = 'hidden';
         document.body.style.userSelect = 'none';
-        
+
         const interactiveElements = document.querySelectorAll('a, button, input, select, textarea');
         interactiveElements.forEach(el => {
           el.style.pointerEvents = 'none';
           el.setAttribute('data-drawing-disabled', 'true');
         });
-        
+
         const touch = e.touches[0];
         this.startDrawing({
           clientX: touch.clientX,
@@ -125,7 +132,7 @@ class CanvasManager {
         });
       }, LONG_PRESS_DURATION);
     }, { passive: true });
-    
+
     document.addEventListener('touchmove', (e) => {
       if (isLongPressActive && this.isDrawing) {
         e.preventDefault();
@@ -136,30 +143,28 @@ class CanvasManager {
         });
       }
     }, { passive: false });
-    
+
     document.addEventListener('touchend', () => {
       clearTimeout(longPressTimer);
       if (isLongPressActive) {
         this.stopDrawing();
-        this.exitDrawingMode();
         isLongPressActive = false;
       }
     });
-  
+
     // マウスが画面外に出た場合
     document.addEventListener('mouseleave', () => {
       clearTimeout(longPressTimer);
       if (isLongPressActive) {
         this.stopDrawing();
-        this.exitDrawingMode();
         isLongPressActive = false;
       }
     });
   }
 
-  startDrawing(e){
+  startDrawing(e) {
     if (!this.isEnabled) return;
-    
+
     this.isDrawing = true;
     const rect = this.canvas.getBoundingClientRect();
     this.lastPos = {
@@ -180,22 +185,20 @@ class CanvasManager {
 
   draw(e) {
     if (!this.isDrawing || !this.isEnabled) return;
-  
+
     const rect = this.canvas.getBoundingClientRect();
     const currentPos = {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top
     };
-  
+
     this.drawLine(this.lastPos, currentPos, this.currentColor, this.currentOpacity);
-  
+
     // 描画中：座標を配列に追加（全ての点を記録）
     if (this.currentStroke) {
       this.currentStroke.points.push({ x: currentPos.x, y: currentPos.y });
-      // デバッグログは削除または不要時のみ表示
-      // console.log('座標追加:', currentPos, '合計点数:', this.currentStroke.points.length);
     }
-  
+
     this.lastPos = currentPos;
   }
 
@@ -224,14 +227,14 @@ class CanvasManager {
   drawLine(from, to, color, opacity = 1.0) {
     const previousAlpha = this.ctx.globalAlpha;
     const previousStroke = this.ctx.strokeStyle;
-    
+
     this.ctx.strokeStyle = color;
     this.ctx.globalAlpha = opacity;
     this.ctx.beginPath();
     this.ctx.moveTo(from.x, from.y);
     this.ctx.lineTo(to.x, to.y);
     this.ctx.stroke();
-    
+
     this.ctx.globalAlpha = previousAlpha;
     this.ctx.strokeStyle = previousStroke;
   }
@@ -255,60 +258,69 @@ class CanvasManager {
       this.ctx.globalAlpha = this.currentOpacity;
     }
   }
+  setEnabled(enabled) {
+    this.isEnabled = enabled;
 
-  setEnabled(enabled){
-  this.isEnabled = enabled;
-  
-  // 初回のみ：bodyにpointer-eventsが設定されていない場合は設定
-  if (!document.body.style.pointerEvents && !this.initialPointerEventsSet) {
-    document.body.style.setProperty('pointer-events', 'auto', 'important');
-    this.initialPointerEventsSet = true;
-  }
-  
-  if (enabled) {
-    const pencilCursorUrl = chrome.runtime.getURL('images/pencil-cursor.png');
-    document.body.style.cursor = `url("${pencilCursorUrl}") 0 16, crosshair`;
-    
-    if (!document.getElementById('drawing-mode-css')) {
-      const style = document.createElement('style');
-      style.id = 'drawing-mode-css';
-      style.textContent = `
-        * {
-          user-select: none !important;
-          pointer-events: none !important;
-        }
-        html, body {
-          pointer-events: auto !important;
-          touch-action: auto !important;
-        }
-        #shared-drawing-control-bar,
-        #shared-drawing-control-bar * {
-          pointer-events: auto !important;
-        }
-      `;
-      document.head.appendChild(style);
+    if (enabled) {
+      // 描画ON時
+      const pencilCursorUrl = chrome.runtime.getURL('images/pencil-cursor.png');
+      document.body.style.cursor = `url("${pencilCursorUrl}") 0 16, crosshair`;
+
+      if (this.canvas) {
+        this.canvas.style.pointerEvents = 'auto';
+      }
+
+      if (!document.getElementById('drawing-mode-css')) {
+        const style = document.createElement('style');
+        style.id = 'drawing-mode-css';
+        style.textContent = `
+    /* レイアウトに影響しない要素のみ制限 */
+    a, button, input, textarea, select, label, [onclick], [href] {
+      user-select: none !important;
+      pointer-events: none !important;
     }
     
-  } else {
-    document.body.style.cursor = '';
-    const style = document.getElementById('drawing-mode-css');
-    if (style) style.remove();
-  }
-
-  }
-  exitDrawingMode() {
-    // キャンバスを再び透明化
-    this.canvas.style.pointerEvents = 'none';
+    /* 必要な要素は除外 */
+    html, body {
+      pointer-events: auto !important;
+      overflow: auto !important;
+    }
     
-    // スクロールを復活（描画ON時の制限状態に戻る）
-    document.body.style.overflow = '';
-  }
+    #shared-drawing-control-bar,
+    #shared-drawing-control-bar * {
+      pointer-events: auto !important;
+    }
+    
+    #shared-drawing-canvas {
+      pointer-events: auto !important;
+    }
+  `;
+        document.head.appendChild(style);
+      }
 
-  updatePosition(isBarVisible) {
-    if (this.canvas) {
-      this.canvas.style.top = isBarVisible ? '60px' : '0px';
-      this.canvas.style.height = isBarVisible ? 'calc(100vh - 60px)' : '100vh';
-      this.resize(isBarVisible);
+    } else {
+      // 描画OFF時
+      document.body.style.cursor = '';
+
+      if (this.canvas) {
+        this.canvas.style.pointerEvents = 'none';
+      }
+
+      const style = document.getElementById('drawing-mode-css');
+      if (style) {
+        style.remove();
+      }
+
+      document.body.style.pointerEvents = 'auto';
+      document.body.style.userSelect = 'auto';
+      document.body.style.overflow = 'auto';
     }
   }
 }
+window.addEventListener('beforeunload', () => {
+  console.log('ページアンロード中');
+});
+
+window.addEventListener('load', () => {
+  console.log('ページロード完了');
+});
