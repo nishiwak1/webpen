@@ -271,7 +271,6 @@ class SharedDrawing {
     });
   }
 
-
   updateBodyPadding() {
     if (!document.body) return;
 
@@ -282,14 +281,18 @@ class SharedDrawing {
     }
   }
 
-
   // ----------------------------------------
   // 2. UI状態制御
   // ----------------------------------------
 
   async toggleBarVisibility(visible) {
     this.isBarVisible = visible;
-    await chrome.storage.local.set({ isBarVisible: visible });
+
+    try {
+      await chrome.storage.local.set({ isBarVisible: visible });
+    } catch (error) {
+      console.error('ストレージ保存エラー:', error);
+    }
 
     if (visible) {
       // 表示時：バーを再作成
@@ -316,55 +319,58 @@ class SharedDrawing {
   async syncUIState(isBarVisible) {
     console.log('UI状態同期受信:', this.isBarVisible, '->', isBarVisible);
 
-    // ストレージから最新の描画モード状態を取得
-    const result = await chrome.storage.local.get(['isDrawingEnabled']);
-    const latestDrawingMode = result.isDrawingEnabled !== false;
+    try {
+      // ストレージから最新の描画モード状態を取得
+      const result = await chrome.storage.local.get(['isDrawingEnabled']);
+      const latestDrawingMode = result.isDrawingEnabled !== false;
 
-    // 現在の状態と違う場合のみ更新
-    if (this.isBarVisible !== isBarVisible || this.isDrawingEnabled !== latestDrawingMode) {
-      this.isBarVisible = isBarVisible;
-      this.isDrawingEnabled = latestDrawingMode;
+      // 現在の状態と違う場合のみ更新
+      if (this.isBarVisible !== isBarVisible || this.isDrawingEnabled !== latestDrawingMode) {
+        this.isBarVisible = isBarVisible;
+        this.isDrawingEnabled = latestDrawingMode;
 
-      // UIが非表示なら描画をOFF
-      if (!this.isBarVisible) {
-        this.isDrawingEnabled = false;
-      }
-      // Canvas状態を更新
-      this.canvasManager.setEnabled(this.isDrawingEnabled);
-
-      if (isBarVisible) {
-        // 表示時：バーを作成
-        this.createControlBar();
-
-        // 最小化前の描画状態を復元
-        if (this.drawingStateBeforeMinimize !== null) {
-          await this.toggleDrawing(this.drawingStateBeforeMinimize);
-          this.drawingStateBeforeMinimize = null;
+        // UIが非表示なら描画をOFF
+        if (!this.isBarVisible) {
+          this.isDrawingEnabled = false;
         }
-      } else {
-        // 非表示時：現在の描画状態を保存して描画をOFFにする
-        this.drawingStateBeforeMinimize = this.isDrawingEnabled;
+        // Canvas状態を更新
+        this.canvasManager.setEnabled(this.isDrawingEnabled);
 
-        await this.toggleDrawing(false);
+        if (isBarVisible) {
+          // 表示時：バーを作成
+          this.createControlBar();
 
-        // バーを削除
+          // 最小化前の描画状態を復元
+          if (this.drawingStateBeforeMinimize !== null) {
+            await this.toggleDrawing(this.drawingStateBeforeMinimize);
+            this.drawingStateBeforeMinimize = null;
+          }
+        } else {
+          // 非表示時：現在の描画状態を保存して描画をOFFにする
+          this.drawingStateBeforeMinimize = this.isDrawingEnabled;
+
+          await this.toggleDrawing(false);
+
+          // バーを削除
+          if (this.controlBar) {
+            this.controlBar.remove();
+            this.controlBar = null;
+          }
+        }
+
+        this.updateBodyPadding();
+
+        // バーが存在する場合のみ状態更新
         if (this.controlBar) {
-          this.controlBar.remove();
-          this.controlBar = null;
+          this.updateBarState();
         }
+
+        console.log('UI状態同期完了:', isBarVisible);
       }
-
-      this.updateBodyPadding();
-
-      // バーが存在する場合のみ状態更新
-      if (this.controlBar) {
-        this.updateBarState();
-      }
-
-      console.log('UI状態同期完了:', isBarVisible);
+    } catch (error) {
+      console.error('UI状態同期エラー:', error);
     }
   }
-
 
   // ----------------------------------------
   // 3. イベント設定
@@ -464,13 +470,25 @@ class SharedDrawing {
       });
     });
 
-    // 透明度スライダー
-    const opacitySlider = self.controlBar.querySelector('#opacity-slider');
-    if (opacitySlider) {
-      opacitySlider.addEventListener('input', (e) => {
+    // Undo/Redoボタン（暫定的に無効化）
+    const undoBtn = self.controlBar.querySelector('#undo-btn');
+    const redoBtn = self.controlBar.querySelector('#redo-btn');
+
+    if (undoBtn) {
+      undoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         e.stopPropagation();
-        const opacity = parseFloat(e.target.value);
-        self.changeOpacity(opacity);
+        console.log('Undo機能は開発中です');
+        // self.handleUndo(); // 一時的にコメントアウト
+      });
+    }
+
+    if (redoBtn) {
+      redoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Redo機能は開発中です');
+        // self.handleRedo(); // 一時的にコメントアウト
       });
     }
 
@@ -487,35 +505,39 @@ class SharedDrawing {
 
   setupChromeListeners() {
     // Chrome拡張機能メッセージ
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      switch (message.type) {
-        case 'PING':
-          sendResponse({ status: 'ok' });
-          break;
-        case 'TOGGLE_BAR_VISIBILITY':
-          this.toggleBarVisibility(message.visible);
-          break;
-        case 'SYNC_UI_STATE':
-          // 新しいメッセージタイプ：UI状態の同期
-          this.syncUIState(message.isBarVisible);
-          break;
-        case 'TOGGLE_DRAWING':
-          this.toggleDrawing(message.isDrawing);
-          break;
-        case 'CLEAR_CANVAS':
-          this.clearCanvas();
-          break;
-        case 'CHANGE_COLOR':
-          this.changeColor(message.color);
-          break;
-        case 'CHANGE_OPACITY':
-          this.changeOpacity(message.opacity);
-          break;
-      }
-    });
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        try {
+          switch (message.type) {
+            case 'PING':
+              sendResponse({ status: 'ok' });
+              break;
+            case 'TOGGLE_BAR_VISIBILITY':
+              this.toggleBarVisibility(message.visible);
+              break;
+            case 'SYNC_UI_STATE':
+              // 新しいメッセージタイプ：UI状態の同期
+              this.syncUIState(message.isBarVisible);
+              break;
+            case 'TOGGLE_DRAWING':
+              this.toggleDrawing(message.isDrawing);
+              break;
+            case 'CLEAR_CANVAS':
+              this.clearCanvas();
+              break;
+            case 'CHANGE_COLOR':
+              this.changeColor(message.color);
+              break;
+            case 'CHANGE_OPACITY':
+              this.changeOpacity(message.opacity);
+              break;
+          }
+        } catch (error) {
+          console.error('メッセージ処理エラー:', error);
+        }
+      });
+    }
   }
-
-
 
   // ----------------------------------------
   // 4. WebSocket関連
@@ -573,14 +595,9 @@ class SharedDrawing {
         if (strokeData && strokeData.points && strokeData.points.length > 1) {
           console.log('線描画開始:', strokeData.points.length, '点');
 
-          for (let i = 1; i < strokeData.points.length; i++) {
-            this.canvasManager.drawLine(
-              strokeData.points[i - 1],
-              strokeData.points[i],
-              strokeData.color || '#000000',
-              strokeData.opacity !== undefined ? strokeData.opacity : 1.0
-            );
-          }
+          // 新しいメソッドを使用
+          this.canvasManager.drawReceivedStroke(strokeData);
+
           console.log('線描画完了');
         }
         break;
@@ -649,10 +666,15 @@ class SharedDrawing {
   async toggleDrawing(enabled) {
     this.isDrawingEnabled = enabled;
     this.canvasManager.setEnabled(enabled);
-    await chrome.storage.local.set({ isDrawingEnabled: enabled });
+
+    try {
+      await chrome.storage.local.set({ isDrawingEnabled: enabled });
+    } catch (error) {
+      console.error('描画設定保存エラー:', error);
+    }
+
     this.updateBarState();
     console.log(`描画モードを ${enabled ? 'ON' : 'OFF'} に変更（全タブ共通）`);
-
   }
 
   clearCanvas() {
@@ -674,25 +696,33 @@ class SharedDrawing {
   saveToLocalStorage(data) {
     if (!this.currentRoom) return;
 
-    const key = `drawing_${this.currentRoom}_${this.tabId}`;
-    chrome.storage.local.get([key], (result) => {
-      const drawings = result[key] || [];
-      drawings.push({ ...data, timestamp: Date.now() });
+    try {
+      const key = `drawing_${this.currentRoom}_${this.tabId}`;
+      chrome.storage.local.get([key], (result) => {
+        const drawings = result[key] || [];
+        drawings.push({ ...data, timestamp: Date.now() });
 
-      if (drawings.length > 1000) {
-        drawings.splice(0, drawings.length - 1000);
-      }
+        if (drawings.length > 1000) {
+          drawings.splice(0, drawings.length - 1000);
+        }
 
-      chrome.storage.local.set({ [key]: drawings });
-    });
+        chrome.storage.local.set({ [key]: drawings });
+      });
+    } catch (error) {
+      console.error('ローカルストレージ保存エラー:', error);
+    }
   }
 }
 
-// 初期化処理
+// 初期化処理（重複宣言を防ぐ）
 if (!window.sharedDrawingInstance) {
   const initializeExtension = () => {
-    if (!window.sharedDrawingInstance) {
-      window.sharedDrawingInstance = new SharedDrawing();
+    try {
+      if (!window.sharedDrawingInstance) {
+        window.sharedDrawingInstance = new SharedDrawing();
+      }
+    } catch (error) {
+      console.error('拡張機能初期化エラー:', error);
     }
   };
 

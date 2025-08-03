@@ -1,4 +1,4 @@
-// Canvas描画を管理するクラス
+// Canvas描画を管理するクラス（CSS Transform方式）
 class CanvasManager {
   constructor(onDrawCallback) {
     this.canvas = null;
@@ -7,15 +7,28 @@ class CanvasManager {
     this.isEnabled = true;
     this.currentColor = '#000000';
     this.currentOpacity = 0.7;
-    this.lastPos = { x: 0, y: 0 };
+    this.lastPos = { x: 0, y: 0 }; // キャンバス座標
     this.onDraw = onDrawCallback;
-    this.currentStroke = null; // 追加
+
+    // 履歴管理用（キャンバス座標で統一）
+    this.currentStroke = null;
+    this.strokes = []; // 全ての描画履歴（キャンバス座標）
+    this.currentIndex = -1;
   }
 
   updatePosition(isBarVisible) {
     if (this.canvas) {
+      // ページ全体の高さを再取得
+      const pageHeight = Math.max(
+        document.body.scrollHeight,
+        document.body.offsetHeight,
+        document.documentElement.clientHeight,
+        document.documentElement.scrollHeight,
+        document.documentElement.offsetHeight
+      );
+
       this.canvas.style.top = isBarVisible ? '60px' : '0px';
-      this.canvas.style.height = isBarVisible ? 'calc(100vh - 60px)' : '100vh';
+      this.canvas.style.height = `${pageHeight - (isBarVisible ? 60 : 0)}px`;
       this.resize(isBarVisible);
     }
   }
@@ -31,18 +44,29 @@ class CanvasManager {
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'shared-drawing-canvas';
 
+    // ページ全体の高さを取得
+    const pageHeight = Math.max(
+      document.body.scrollHeight,
+      document.body.offsetHeight,
+      document.documentElement.clientHeight,
+      document.documentElement.scrollHeight,
+      document.documentElement.offsetHeight
+    );
+
     const canvasStyles = `
       position: fixed !important;
       top: ${isBarVisible ? '60px' : '0px'} !important;
       left: 0 !important;
       width: 100vw !important;
-      height: ${isBarVisible ? 'calc(100vh - 60px)' : '100vh'} !important;
+      height: ${pageHeight - (isBarVisible ? 60 : 0)}px !important;
       z-index: 2147483646 !important;
       pointer-events: none !important;
       background: transparent !important;
       cursor: default !important;
       touch-action: manipulation !important;
       user-select: none !important;
+      will-change: transform !important;
+      transform-origin: 0 0 !important;
     `;
 
     this.canvas.style.cssText = canvasStyles;
@@ -57,12 +81,72 @@ class CanvasManager {
 
     // リサイズイベント
     window.addEventListener('resize', () => this.resize(isBarVisible));
+
+    // スクロールイベントを設定
+    this.setupScrollListener();
+
+    // 初期位置を設定
+    this.updateCanvasTransform();
+
+    // ページコンテンツの変化を監視
+    this.observePageChanges(isBarVisible);
+  }
+
+  setupScrollListener() {
+    const scrollHandler = () => {
+      // キャンバス全体をtransformで移動（即座に反映）
+      this.updateCanvasTransform();
+    };
+
+    // パッシブリスナーとして設定（パフォーマンス向上）
+    window.addEventListener('scroll', scrollHandler, { passive: true });
+    document.addEventListener('scroll', scrollHandler, { passive: true });
+  }
+
+  updateCanvasTransform() {
+    if (!this.canvas) return;
+
+    const scrollX = window.scrollX || document.documentElement.scrollLeft;
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+
+    // キャンバス全体をスクロール量の逆方向に移動
+    this.canvas.style.transform = `translate(-${scrollX}px, -${scrollY}px)`;
+  }
+
+  // 画面座標をキャンバス座標に変換（transform考慮）
+  screenToCanvas(screenX, screenY) {
+    const rect = this.canvas.getBoundingClientRect();
+
+    // transformされたキャンバス上での座標を計算
+    // getBoundingClientRectはtransform後の位置を返すので、
+    // 単純にrect.leftとrect.topを引くだけで正しい座標が得られる
+    return {
+      x: screenX - rect.left,
+      y: screenY - rect.top
+    };
   }
 
   resize(isBarVisible) {
+    // ページ全体の高さを取得
+    const pageHeight = Math.max(
+      document.body.scrollHeight,
+      document.body.offsetHeight,
+      document.documentElement.clientHeight,
+      document.documentElement.scrollHeight,
+      document.documentElement.offsetHeight
+    );
+
     this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight - (isBarVisible ? 60 : 20);
+    // ページ全体の高さに設定（バーの高さを考慮）
+    this.canvas.height = pageHeight - (isBarVisible ? 60 : 0);
+
     this.setupContext();
+
+    // リサイズ後に全ての線を再描画
+    this.redrawAllStrokes();
+
+    // 位置を更新
+    this.updateCanvasTransform();
   }
 
   setupContext() {
@@ -73,6 +157,46 @@ class CanvasManager {
     this.ctx.strokeStyle = this.currentColor;
     this.ctx.globalAlpha = this.currentOpacity;
   }
+
+  redrawAllStrokes() {
+    if (!this.ctx) return;
+
+    // キャンバスをクリア
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 全ての線をそのままの座標で再描画
+    this.strokes.forEach(stroke => {
+      this.drawStroke(stroke);
+    });
+  }
+
+  drawStroke(stroke) {
+    if (!stroke.points || stroke.points.length < 2) return;
+
+    const previousAlpha = this.ctx.globalAlpha;
+    const previousStroke = this.ctx.strokeStyle;
+
+    this.ctx.strokeStyle = stroke.color;
+    this.ctx.globalAlpha = stroke.opacity;
+    this.ctx.beginPath();
+
+    // キャンバス座標をそのまま使用（座標変換不要）
+    for (let i = 0; i < stroke.points.length; i++) {
+      const point = stroke.points[i];
+
+      if (i === 0) {
+        this.ctx.moveTo(point.x, point.y);
+      } else {
+        this.ctx.lineTo(point.x, point.y);
+      }
+    }
+
+    this.ctx.stroke();
+
+    this.ctx.globalAlpha = previousAlpha;
+    this.ctx.strokeStyle = previousStroke;
+  }
+
   setupEventListeners() {
     let longPressTimer = null;
     let isLongPressActive = false;
@@ -166,53 +290,51 @@ class CanvasManager {
     if (!this.isEnabled) return;
 
     this.isDrawing = true;
-    const rect = this.canvas.getBoundingClientRect();
-    this.lastPos = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
 
-    // 線の開始：座標配列を初期化
+    // 画面座標をキャンバス座標に変換
+    const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
+    this.lastPos = canvasPos;
+
+    // 線の開始：キャンバス座標で管理
     this.currentStroke = {
       startTime: Date.now(),
       color: this.currentColor,
       opacity: this.currentOpacity,
-      points: [{ x: this.lastPos.x, y: this.lastPos.y }]
+      points: [canvasPos] // キャンバス座標
     };
-
-    // start通知は削除（まとめて送信するため）
   }
 
   draw(e) {
     if (!this.isDrawing || !this.isEnabled) return;
 
-    const rect = this.canvas.getBoundingClientRect();
-    const currentPos = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
+    // 画面座標をキャンバス座標に変換
+    const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
 
-    this.drawLine(this.lastPos, currentPos, this.currentColor, this.currentOpacity);
+    // キャンバス上で線を描画（そのままの座標で）
+    this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity);
 
-    // 描画中：座標を配列に追加（全ての点を記録）
+    // キャンバス座標を履歴に追加
     if (this.currentStroke) {
-      this.currentStroke.points.push({ x: currentPos.x, y: currentPos.y });
+      this.currentStroke.points.push(canvasPos);
     }
 
-    this.lastPos = currentPos;
+    this.lastPos = canvasPos;
   }
 
   stopDrawing() {
     if (!this.isDrawing) return;
     this.isDrawing = false;
 
-    // デバッグ：線データの確認
     console.log('=== stopDrawing デバッグ ===');
     console.log('currentStroke:', this.currentStroke);
     console.log('currentStroke.points:', this.currentStroke?.points);
     console.log('currentStroke.points.length:', this.currentStroke?.points?.length);
 
     if (this.currentStroke) {
+      // 履歴に追加
+      this.strokes.push({ ...this.currentStroke });
+
+      // そのまま送信（キャンバス座標で統一）
       console.log('線データを送信します:', this.currentStroke);
       this.onDraw({
         type: 'stroke',
@@ -222,6 +344,39 @@ class CanvasManager {
     } else {
       console.log('currentStrokeが存在しません！');
     }
+
+    // 描画モード終了
+    this.canvas.style.pointerEvents = 'none';
+    document.body.style.overflow = '';
+    document.body.style.userSelect = '';
+
+    // 無効化していた要素を復元
+    const disabledElements = document.querySelectorAll('[data-drawing-disabled]');
+    disabledElements.forEach(el => {
+      el.style.pointerEvents = '';
+      el.removeAttribute('data-drawing-disabled');
+    });
+  }
+
+  // 他のユーザーからの線データを受信した時の処理
+  drawReceivedStroke(strokeData) {
+    if (!strokeData.points || strokeData.points.length < 2) return;
+
+    console.log('受信した線データを描画:', strokeData);
+
+    // 受信したデータもキャンバス座標として扱う
+    const stroke = {
+      startTime: strokeData.startTime,
+      color: strokeData.color || '#000000',
+      opacity: strokeData.opacity || 1.0,
+      points: strokeData.points // キャンバス座標として保存
+    };
+
+    // 履歴に追加
+    this.strokes.push(stroke);
+
+    // そのままの座標で描画
+    this.drawStroke(stroke);
   }
 
   drawLine(from, to, color, opacity = 1.0) {
@@ -243,6 +398,8 @@ class CanvasManager {
     if (this.ctx) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
+    // 履歴もクリア
+    this.strokes = [];
   }
 
   setColor(color) {
@@ -258,6 +415,7 @@ class CanvasManager {
       this.ctx.globalAlpha = this.currentOpacity;
     }
   }
+
   setEnabled(enabled) {
     this.isEnabled = enabled;
 
@@ -316,7 +474,35 @@ class CanvasManager {
       document.body.style.overflow = 'auto';
     }
   }
+
+  observePageChanges(isBarVisible) {
+    // MutationObserverでページの高さ変化を監視
+    const observer = new MutationObserver(() => {
+      const currentHeight = Math.max(
+        document.body.scrollHeight,
+        document.body.offsetHeight,
+        document.documentElement.clientHeight,
+        document.documentElement.scrollHeight,
+        document.documentElement.offsetHeight
+      );
+
+      // 現在のキャンバス高さと比較
+      if (this.canvas && Math.abs(this.canvas.height - (currentHeight - (isBarVisible ? 60 : 0))) > 10) {
+        console.log('ページ高さ変化を検知:', currentHeight);
+        this.resize(isBarVisible);
+      }
+    });
+
+    // body要素の変化を監視
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: false
+    });
+  }
 }
+
 window.addEventListener('beforeunload', () => {
   console.log('ページアンロード中');
 });
