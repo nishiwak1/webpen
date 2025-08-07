@@ -90,11 +90,21 @@
       cursor: pointer;
       font-size: 10px;
       pointer-events: auto;
-      transition: opacity 0.2s;
+      transition: all 0.2s;
     }
     
-    .btn:hover {
+    .btn:hover:not(:disabled) {
       opacity: 0.8;
+      transform: scale(1.05);
+    }
+    
+    .btn:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+    
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
     }
     
     .btn-join { background: #4CAF50; }
@@ -104,6 +114,35 @@
     .btn-toggle-off { background: #ff6b6b; }
     .btn-clear { background: #ff9800; }
     .btn-minimize { background: rgba(255,255,255,0.2); }
+    
+    /* Undo/Redoボタンのスタイル */
+    .btn-undo, .btn-redo {
+      background: #9C27B0;
+      min-width: 60px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    
+    .btn-undo:hover:not(:disabled), 
+    .btn-redo:hover:not(:disabled) {
+      background: #7B1FA2;
+    }
+    
+    /* ボタングループ */
+    .button-group {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    
+    .divider {
+      width: 1px;
+      height: 30px;
+      background: rgba(255,255,255,0.3);
+      margin: 0 5px;
+    }
     
     .color-section {
       display: flex;
@@ -137,6 +176,7 @@
     
     .color-btn.active {
       border-color: white;
+      box-shadow: 0 0 10px rgba(255,255,255,0.5);
     }
     
     .spacer {
@@ -171,6 +211,13 @@
     .expand-btn:hover {
       opacity: 0.8;
     }
+    
+    /* キーボードショートカットヒント */
+    .shortcut-hint {
+      font-size: 8px;
+      opacity: 0.7;
+      margin-left: 2px;
+    }
   </style>
 </head>
 <body>
@@ -185,8 +232,20 @@
       <span class="logo-text">共有お絵描き</span>
     </div>
     
-    <button id="undo-btn" class="btn btn-undo">↶ 戻る</button>
-    <button id="redo-btn" class="btn btn-redo">↷ 進む</button>
+    <div class="divider"></div>
+    
+    <div class="button-group">
+      <button id="undo-btn" class="btn btn-undo" title="ひとつ戻る (Ctrl+Z)">
+        <span>↶</span>
+        <span>戻る</span>
+      </button>
+      <button id="redo-btn" class="btn btn-redo" title="やり直す (Ctrl+Shift+Z)">
+        <span>↷</span>
+        <span>進む</span>
+      </button>
+    </div>
+    
+    <div class="divider"></div>
     
     <!-- 部屋なし状態 -->
     <div id="room-join" class="room-section">
@@ -202,17 +261,21 @@
       <button id="leave-btn" class="btn btn-leave">退出</button>
     </div>
     
+    <div class="divider"></div>
+    
     <div class="color-section">
       <span class="color-label">色:</span>
       <div class="color-palette">
-        <div class="color-btn active" data-color="#000000" style="background: #000000;"></div>
-        <div class="color-btn" data-color="#ff0000" style="background: #ff0000;"></div>
-        <div class="color-btn" data-color="#00ff00" style="background: #00ff00;"></div>
-        <div class="color-btn" data-color="#0000ff" style="background: #0000ff;"></div>
-        <div class="color-btn" data-color="#ffff00" style="background: #ffff00;"></div>
-        <div class="color-btn" data-color="#ff00ff" style="background: #ff00ff;"></div>
+        <div class="color-btn active" data-color="#000000" style="background: #000000;" title="黒"></div>
+        <div class="color-btn" data-color="#ff0000" style="background: #ff0000;" title="赤"></div>
+        <div class="color-btn" data-color="#00ff00" style="background: #00ff00;" title="緑"></div>
+        <div class="color-btn" data-color="#0000ff" style="background: #0000ff;" title="青"></div>
+        <div class="color-btn" data-color="#ffff00" style="background: #ffff00;" title="黄"></div>
+        <div class="color-btn" data-color="#ff00ff" style="background: #ff00ff;" title="マゼンタ"></div>
       </div>
     </div>
+    
+    <div class="divider"></div>
     
     <button id="toggle-draw-btn" class="btn btn-toggle-on">描画: ON</button>
     <button id="clear-btn" class="btn btn-clear">クリア</button>

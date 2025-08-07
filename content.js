@@ -13,11 +13,11 @@ class SharedDrawing {
     this.currentColor = '#000000';
     this.currentOpacity = 0.7;
 
-    // ひとつ戻る・進む用の、履歴管理
-    this.myStrokes = []; // 自分が描いた線の履歴
-    this.otherStrokes = []; // 他人が描いた線の履歴
-    this.undoneStrokes = []; // 取り消した自分の線
+    // ひとつ戻る・進む用の履歴管理
+    this.history = []; // 全ての操作履歴（描画、クリアなど）
+    this.historyIndex = -1; // 現在の履歴位置
     this.maxHistorySize = 50; // 履歴の最大サイズ
+    this.redoStack = []; // Redo用のスタック
 
     // タブIDを生成（一意識別用）
     this.tabId = this.generateTabId();
@@ -73,10 +73,6 @@ class SharedDrawing {
         this.createControlBar();
         this.canvasManager.create(this.isBarVisible);
         this.setupChromeListeners();
-
-        // 新しいタブでは部屋に自動接続しない
-        // ユーザーが手動で部屋コードを入力するまで待機
-
         this.isInitialized = true;
       }, 500);
 
@@ -163,10 +159,8 @@ class SharedDrawing {
     }
   }
 
-  // 新しいメソッド：状態に応じてバーを表示
   showBarIfNeeded() {
     if (this.controlBar && this.isBarVisible) {
-      // 少し遅延を入れて自然に表示
       setTimeout(() => {
         if (this.controlBar) {
           this.controlBar.style.opacity = '1';
@@ -176,13 +170,11 @@ class SharedDrawing {
     }
   }
 
-  // 新しいメソッド：バーを隠す
   hideBar() {
     if (this.controlBar) {
       this.controlBar.style.opacity = '0';
       this.controlBar.style.visibility = 'hidden';
 
-      // アニメーション完了後に削除
       setTimeout(() => {
         if (this.controlBar) {
           this.controlBar.remove();
@@ -238,14 +230,13 @@ class SharedDrawing {
       }
     }
 
-    // 描画ボタンの状態更新（タブ固有の状態を反映）
+    // 描画ボタンの状態更新
     if (toggleDrawButton) {
       const displayText = !this.isBarVisible ? '描画: OFF (最小化中)' : `描画: ${this.isDrawingEnabled ? 'ON' : 'OFF'}`;
 
       toggleDrawButton.textContent = displayText;
       toggleDrawButton.className = `btn ${this.isDrawingEnabled ? 'btn-toggle-on' : 'btn-toggle-off'}`;
 
-      // 最小化中は描画ボタンを無効化
       toggleDrawButton.disabled = !this.isBarVisible;
       if (!this.isBarVisible) {
         toggleDrawButton.style.opacity = '0.5';
@@ -256,7 +247,7 @@ class SharedDrawing {
       }
     }
 
-    // 透明度スライダーの状態更新（タブ固有の値を反映）
+    // 透明度スライダーの状態更新
     if (opacitySlider) {
       opacitySlider.value = this.currentOpacity;
     }
@@ -264,11 +255,14 @@ class SharedDrawing {
       opacityValue.textContent = Math.round(this.currentOpacity * 100) + '%';
     }
 
-    // 色ボタンの状態更新（タブ固有の色を反映）
+    // 色ボタンの状態更新
     const colorBtns = this.controlBar.querySelectorAll('.color-btn');
     colorBtns.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.color === this.currentColor);
     });
+
+    // Undo/Redoボタンの状態を更新
+    this.updateUndoRedoButtons();
   }
 
   updateBodyPadding() {
@@ -295,21 +289,14 @@ class SharedDrawing {
     }
 
     if (visible) {
-      // 表示時：バーを再作成
       this.createControlBar();
-
-      // 最小化前の描画状態を復元
       if (this.drawingStateBeforeMinimize !== null) {
         await this.toggleDrawing(this.drawingStateBeforeMinimize);
         this.drawingStateBeforeMinimize = null;
       }
     } else {
-      // 非表示時：現在の描画状態を保存して描画をOFFにする
       this.drawingStateBeforeMinimize = this.isDrawingEnabled;
-
       await this.toggleDrawing(false);
-
-      // バーをアニメーション付きで隠す
       this.hideBar();
     }
 
@@ -320,38 +307,28 @@ class SharedDrawing {
     console.log('UI状態同期受信:', this.isBarVisible, '->', isBarVisible);
 
     try {
-      // ストレージから最新の描画モード状態を取得
       const result = await chrome.storage.local.get(['isDrawingEnabled']);
       const latestDrawingMode = result.isDrawingEnabled !== false;
 
-      // 現在の状態と違う場合のみ更新
       if (this.isBarVisible !== isBarVisible || this.isDrawingEnabled !== latestDrawingMode) {
         this.isBarVisible = isBarVisible;
         this.isDrawingEnabled = latestDrawingMode;
 
-        // UIが非表示なら描画をOFF
         if (!this.isBarVisible) {
           this.isDrawingEnabled = false;
         }
-        // Canvas状態を更新
+
         this.canvasManager.setEnabled(this.isDrawingEnabled);
 
         if (isBarVisible) {
-          // 表示時：バーを作成
           this.createControlBar();
-
-          // 最小化前の描画状態を復元
           if (this.drawingStateBeforeMinimize !== null) {
             await this.toggleDrawing(this.drawingStateBeforeMinimize);
             this.drawingStateBeforeMinimize = null;
           }
         } else {
-          // 非表示時：現在の描画状態を保存して描画をOFFにする
           this.drawingStateBeforeMinimize = this.isDrawingEnabled;
-
           await this.toggleDrawing(false);
-
-          // バーを削除
           if (this.controlBar) {
             this.controlBar.remove();
             this.controlBar = null;
@@ -360,7 +337,6 @@ class SharedDrawing {
 
         this.updateBodyPadding();
 
-        // バーが存在する場合のみ状態更新
         if (this.controlBar) {
           this.updateBarState();
         }
@@ -470,7 +446,7 @@ class SharedDrawing {
       });
     });
 
-    // Undo/Redoボタン（暫定的に無効化）
+    // Undo/Redoボタン
     const undoBtn = self.controlBar.querySelector('#undo-btn');
     const redoBtn = self.controlBar.querySelector('#redo-btn');
 
@@ -478,8 +454,7 @@ class SharedDrawing {
       undoBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Undo機能は開発中です');
-        // self.handleUndo(); // 一時的にコメントアウト
+        self.handleUndo();
       });
     }
 
@@ -487,8 +462,7 @@ class SharedDrawing {
       redoBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Redo機能は開発中です');
-        // self.handleRedo(); // 一時的にコメントアウト
+        self.handleRedo();
       });
     }
 
@@ -501,10 +475,28 @@ class SharedDrawing {
         self.clearCanvas();
       });
     }
+
+    // キーボードショートカット
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+Z または Cmd+Z でUndo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        self.handleUndo();
+      }
+      // Ctrl+Shift+Z または Cmd+Shift+Z でRedo
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        self.handleRedo();
+      }
+      // Ctrl+Y または Cmd+Y でもRedo
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        self.handleRedo();
+      }
+    });
   }
 
   setupChromeListeners() {
-    // Chrome拡張機能メッセージ
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         try {
@@ -516,7 +508,6 @@ class SharedDrawing {
               this.toggleBarVisibility(message.visible);
               break;
             case 'SYNC_UI_STATE':
-              // 新しいメッセージタイプ：UI状態の同期
               this.syncUIState(message.isBarVisible);
               break;
             case 'TOGGLE_DRAWING':
@@ -542,7 +533,21 @@ class SharedDrawing {
   // ----------------------------------------
   // 4. WebSocket関連
   // ----------------------------------------
+
   handleLocalDraw(drawData) {
+    // 描画操作を履歴に追加（自分の操作のみ）
+    if (drawData.type === 'stroke' && drawData.stroke) {
+      this.addToHistory({
+        type: 'stroke',
+        stroke: drawData.stroke,
+        timestamp: Date.now(),
+        isLocal: true  // 自分の操作であることを明示
+      });
+
+      // Undo/Redoボタンの状態を更新
+      this.updateUndoRedoButtons();
+    }
+
     if (!this.wsManager.isConnected()) {
       console.log('WebSocket未接続のためローカルストレージに保存');
       this.saveToLocalStorage(drawData);
@@ -553,6 +558,7 @@ class SharedDrawing {
       const payload = {
         action: 'drawData',
         roomId: this.currentRoom,
+        id: drawData.stroke.id,  // ストロークIDを送信
         points: drawData.stroke.points,
         color: drawData.stroke.color,
         opacity: drawData.stroke.opacity,
@@ -595,16 +601,34 @@ class SharedDrawing {
         if (strokeData && strokeData.points && strokeData.points.length > 1) {
           console.log('線描画開始:', strokeData.points.length, '点');
 
-          // 新しいメソッドを使用
+          // 他のユーザーの描画として処理（履歴には追加しない）
           this.canvasManager.drawReceivedStroke(strokeData);
-
           console.log('線描画完了');
         }
         break;
 
+      case 'removeStroke':
+        console.log('ストローク削除受信:', message.strokeId);
+        // 他のユーザーが自分の線を削除した場合の処理
+        // 該当するストロークを探して削除（ただし、他人の線は削除しない）
+        this.handleRemoteStrokeRemoval(message.strokeId);
+        break;
+
       case 'clearCanvas':
         console.log('キャンバスクリア受信');
+        // クリア前の状態を保存（自分の線も含めて全て消える）
+        const previousState = this.canvasManager.getCanvasState();
+
+        // 全員の線をクリア
         this.canvasManager.clear();
+
+        // クリア操作を履歴に追加（Undo可能にする）
+        this.addToHistory({
+          type: 'clear',
+          previousState: previousState,
+          timestamp: Date.now(),
+          fromRemote: true
+        });
         break;
 
       default:
@@ -623,7 +647,6 @@ class SharedDrawing {
       return;
     }
 
-    // タブ固有で部屋情報を管理（ストレージには保存しない）
     this.currentRoom = roomCode;
     this.wsManager.connect(roomCode);
     this.updateBarState();
@@ -678,7 +701,25 @@ class SharedDrawing {
   }
 
   clearCanvas() {
+    // クリア前の状態を保存（全員の線が消える）
+    const previousState = this.canvasManager.getCanvasState();
+
+    // クリア操作を履歴に追加
+    this.addToHistory({
+      type: 'clear',
+      previousState: previousState,
+      timestamp: Date.now(),
+      isLocal: true
+    });
+
+    // キャンバスをクリア（全員の線を削除）
     this.canvasManager.clear();
+
+    // Redoスタックもクリア（クリア後は復元できない）
+    this.redoStack = [];
+
+    // ボタン状態を更新
+    this.updateUndoRedoButtons();
 
     if (this.wsManager.isConnected()) {
       this.wsManager.send({
@@ -689,7 +730,211 @@ class SharedDrawing {
   }
 
   // ----------------------------------------
-  // 6. その他
+  // 6. 履歴管理（Undo/Redo）
+  // ----------------------------------------
+
+  addToHistory(action) {
+    // 現在の位置より後の履歴を削除（新しい分岐を作成）
+    if (this.historyIndex < this.history.length - 1) {
+      this.history = this.history.slice(0, this.historyIndex + 1);
+    }
+
+    // Redoスタックをクリア（新しい操作が入ったらRedoはリセット）
+    this.redoStack = [];
+
+    // 新しい操作を追加
+    this.history.push(action);
+
+    // 履歴サイズの制限
+    if (this.history.length > this.maxHistorySize) {
+      this.history.shift();
+    } else {
+      this.historyIndex++;
+    }
+
+    // Undo/Redoボタンの状態を更新
+    this.updateUndoRedoButtons();
+  }
+
+  // Undo処理（自分の操作のみ）
+  handleUndo() {
+    // 自分の最後のストロークを削除
+    const removedStroke = this.canvasManager.undoMyLastStroke();
+
+    if (removedStroke) {
+      console.log('Undo実行: 自分のストロークを削除');
+
+      // Redoスタックに追加
+      this.redoStack.push({
+        type: 'stroke',
+        stroke: removedStroke
+      });
+
+      // 履歴からも削除（自分のストロークのみ）
+      for (let i = this.history.length - 1; i >= 0; i--) {
+        if (this.history[i].type === 'stroke' &&
+          this.history[i].stroke.id === removedStroke.id) {
+          this.history.splice(i, 1);
+          if (this.historyIndex >= i) {
+            this.historyIndex--;
+          }
+          break;
+        }
+      }
+
+      // Undo/Redoボタンの状態を更新
+      this.updateUndoRedoButtons();
+
+      // 他のユーザーに通知（自分の線が消えたことを伝える）
+      if (this.wsManager.isConnected()) {
+        this.wsManager.send({
+          action: 'removeStroke',
+          roomId: this.currentRoom,
+          strokeId: removedStroke.id
+        });
+      }
+    } else {
+      console.log('Undo: 削除できる自分のストロークがありません');
+    }
+  }
+
+  // Redo処理（自分の操作のみ）
+  handleRedo() {
+    if (this.redoStack.length === 0) {
+      console.log('Redo: Redoスタックが空です');
+      return;
+    }
+
+    // Redoスタックから操作を取り出す
+    const actionToRedo = this.redoStack.pop();
+    console.log('Redo実行:', actionToRedo.type);
+
+    if (actionToRedo.type === 'stroke' && actionToRedo.stroke) {
+      // ストロークを復元
+      this.canvasManager.redoStroke(actionToRedo.stroke);
+
+      // 履歴に戻す
+      this.history.push({
+        type: 'stroke',
+        stroke: actionToRedo.stroke,
+        timestamp: Date.now()
+      });
+      this.historyIndex = this.history.length - 1;
+
+      // 他のユーザーに通知（線が復活したことを伝える）
+      if (this.wsManager.isConnected()) {
+        this.wsManager.send({
+          action: 'drawData',
+          roomId: this.currentRoom,
+          id: actionToRedo.stroke.id,
+          points: actionToRedo.stroke.points,
+          color: actionToRedo.stroke.color,
+          opacity: actionToRedo.stroke.opacity,
+          startTime: actionToRedo.stroke.startTime
+        });
+      }
+    }
+
+    // Undo/Redoボタンの状態を更新
+    this.updateUndoRedoButtons();
+  }
+
+  // キャンバスを履歴から再構築
+  rebuildCanvas() {
+    console.log('キャンバス再構築開始 - 履歴位置:', this.historyIndex + 1);
+
+    // キャンバスをクリア
+    this.canvasManager.clear();
+
+    // 現在の履歴位置までの操作を再実行
+    for (let i = 0; i <= this.historyIndex; i++) {
+      const action = this.history[i];
+
+      switch (action.type) {
+        case 'stroke':
+          // ストロークを再描画
+          this.canvasManager.drawReceivedStroke(action.stroke);
+          break;
+        case 'clear':
+          // キャンバスをクリア
+          this.canvasManager.clear();
+          break;
+      }
+    }
+
+    console.log('キャンバス再構築完了');
+  }
+
+  handleRemoteUndo() {
+    // リモートからのUndoは単純に最後の操作を取り消す
+    if (this.history.length > 0 && this.historyIndex >= 0) {
+      const lastAction = this.history[this.historyIndex];
+
+      // リモートからの操作の場合のみ処理
+      if (lastAction.fromRemote) {
+        this.redoStack.push(lastAction);
+        this.historyIndex--;
+        this.rebuildCanvas();
+        this.updateUndoRedoButtons();
+      }
+    }
+  }
+
+  // リモート
+
+  // リモートからのRedo処理
+  handleRemoteRedo() {
+    // リモートからのRedoはRedoスタックから復元
+    if (this.redoStack.length > 0) {
+      const actionToRedo = this.redoStack.pop();
+
+      // リモートからの操作の場合のみ処理
+      if (actionToRedo.fromRemote) {
+        this.historyIndex++;
+        this.history[this.historyIndex] = actionToRedo;
+
+        switch (actionToRedo.type) {
+          case 'stroke':
+            this.canvasManager.drawReceivedStroke(actionToRedo.stroke);
+            break;
+          case 'clear':
+            this.canvasManager.clear();
+            break;
+        }
+
+        this.updateUndoRedoButtons();
+      }
+    }
+  }
+
+  // Undo/Redoボタンの有効/無効を更新
+  updateUndoRedoButtons() {
+    const undoBtn = this.controlBar?.querySelector('#undo-btn');
+    const redoBtn = this.controlBar?.querySelector('#redo-btn');
+
+    if (undoBtn) {
+      const canUndo = this.historyIndex >= 0;
+      undoBtn.disabled = !canUndo;
+      undoBtn.style.opacity = canUndo ? '1' : '0.5';
+      undoBtn.style.cursor = canUndo ? 'pointer' : 'not-allowed';
+
+      // ツールチップを追加
+      undoBtn.title = canUndo ? 'ひとつ戻る (Ctrl+Z)' : '戻る操作がありません';
+    }
+
+    if (redoBtn) {
+      const canRedo = this.redoStack.length > 0;
+      redoBtn.disabled = !canRedo;
+      redoBtn.style.opacity = canRedo ? '1' : '0.5';
+      redoBtn.style.cursor = canRedo ? 'pointer' : 'not-allowed';
+
+      // ツールチップを追加
+      redoBtn.title = canRedo ? 'やり直す (Ctrl+Shift+Z)' : 'やり直す操作がありません';
+    }
+  }
+
+  // ----------------------------------------
+  // 7. その他
   // ----------------------------------------
 
   // ローカルストレージ保存（タブ固有のキーを使用）

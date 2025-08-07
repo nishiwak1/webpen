@@ -13,7 +13,10 @@ class CanvasManager {
     // 履歴管理用（キャンバス座標で統一）
     this.currentStroke = null;
     this.strokes = []; // 全ての描画履歴（キャンバス座標）
-    this.currentIndex = -1;
+
+    // 個人履歴管理用
+    this.myStrokeIds = new Set(); // 自分が描いたストロークのIDを管理
+    this.strokeIdCounter = 0; // ストロークID生成用
   }
 
   updatePosition(isBarVisible) {
@@ -295,12 +298,17 @@ class CanvasManager {
     const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
     this.lastPos = canvasPos;
 
+    // 一意のIDを生成
+    const strokeId = `stroke_${Date.now()}_${this.strokeIdCounter++}`;
+
     // 線の開始：キャンバス座標で管理
     this.currentStroke = {
+      id: strokeId,
       startTime: Date.now(),
       color: this.currentColor,
       opacity: this.currentOpacity,
-      points: [canvasPos] // キャンバス座標
+      points: [canvasPos], // キャンバス座標
+      isLocal: true // 自分が描いた線であることを示すフラグ
     };
   }
 
@@ -330,7 +338,10 @@ class CanvasManager {
     console.log('currentStroke.points:', this.currentStroke?.points);
     console.log('currentStroke.points.length:', this.currentStroke?.points?.length);
 
-    if (this.currentStroke) {
+    if (this.currentStroke && this.currentStroke.points.length > 1) {
+      // 自分が描いた線として記録
+      this.myStrokeIds.add(this.currentStroke.id);
+
       // 履歴に追加
       this.strokes.push({ ...this.currentStroke });
 
@@ -342,7 +353,7 @@ class CanvasManager {
       });
       this.currentStroke = null;
     } else {
-      console.log('currentStrokeが存在しません！');
+      console.log('currentStrokeが存在しないか、点が1つ以下です');
     }
 
     // 描画モード終了
@@ -366,13 +377,15 @@ class CanvasManager {
 
     // 受信したデータもキャンバス座標として扱う
     const stroke = {
+      id: strokeData.id || `remote_${Date.now()}_${Math.random()}`,
       startTime: strokeData.startTime,
       color: strokeData.color || '#000000',
       opacity: strokeData.opacity || 1.0,
-      points: strokeData.points // キャンバス座標として保存
+      points: strokeData.points, // キャンバス座標として保存
+      isLocal: false // 他のユーザーが描いた線
     };
 
-    // 履歴に追加
+    // 履歴に追加（他のユーザーの線なのでmyStrokeIdsには追加しない）
     this.strokes.push(stroke);
 
     // そのままの座標で描画
@@ -400,6 +413,7 @@ class CanvasManager {
     }
     // 履歴もクリア
     this.strokes = [];
+    this.myStrokeIds.clear(); // 自分のストロークIDもクリア
   }
 
   setColor(color) {
@@ -501,12 +515,87 @@ class CanvasManager {
       characterData: false
     });
   }
+
+  // ========================================
+  // 個人履歴管理用のUndo/Redo機能
+  // ========================================
+
+  // 自分の最後のストロークを削除してUndoスタックに返す
+  undoMyLastStroke() {
+    // 自分が描いた最後のストロークを探す
+    for (let i = this.strokes.length - 1; i >= 0; i--) {
+      const stroke = this.strokes[i];
+
+      // 自分が描いた線かチェック
+      if (this.myStrokeIds.has(stroke.id)) {
+        // 配列から削除
+        const removedStroke = this.strokes.splice(i, 1)[0];
+
+        // IDセットからも削除
+        this.myStrokeIds.delete(stroke.id);
+
+        // キャンバスを再描画
+        this.redrawAllStrokes();
+
+        console.log('自分のストロークを削除:', removedStroke.id);
+        return removedStroke;
+      }
+    }
+
+    console.log('削除できる自分のストロークがありません');
+    return null;
+  }
+
+  // Undoしたストロークを復元
+  redoStroke(stroke) {
+    if (!stroke) return;
+
+    // 自分のストロークとして復元
+    this.myStrokeIds.add(stroke.id);
+    this.strokes.push(stroke);
+
+    // 再描画
+    this.redrawAllStrokes();
+
+    console.log('ストロークを復元:', stroke.id);
+  }
+
+  // 現在のキャンバス状態を取得
+  getCanvasState() {
+    console.log('現在のストローク数:', this.strokes.length);
+    console.log('自分のストローク数:', this.myStrokeIds.size);
+    return {
+      strokes: [...this.strokes],
+      myStrokeIds: new Set(this.myStrokeIds)
+    };
+  }
+
+  // キャンバス状態を復元（クリア操作のUndo用）
+  restoreCanvasState(state) {
+    if (state && state.strokes) {
+      this.strokes = [...state.strokes];
+      this.myStrokeIds = new Set(state.myStrokeIds || []);
+      this.redrawAllStrokes();
+      console.log('キャンバス状態を復元:', this.strokes.length, '個のストローク');
+    }
+  }
+
+  // 自分が描いたストロークの数を取得
+  getMyStrokeCount() {
+    return this.myStrokeIds.size;
+  }
+
+  // デバッグ用：全ストロークの情報を出力
+  debugStrokes() {
+    console.log('=== ストローク情報 ===');
+    console.log('全ストローク数:', this.strokes.length);
+    console.log('自分のストローク数:', this.myStrokeIds.size);
+    this.strokes.forEach((stroke, index) => {
+      console.log(`[${index}] ID: ${stroke.id}, 自分の線: ${this.myStrokeIds.has(stroke.id)}, 点の数: ${stroke.points.length}`);
+    });
+  }
 }
 
 window.addEventListener('beforeunload', () => {
   console.log('ページアンロード中');
-});
-
-window.addEventListener('load', () => {
-  console.log('ページロード完了');
 });
