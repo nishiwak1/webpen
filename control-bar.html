@@ -142,6 +142,7 @@
       align-items: center;
       gap: 8px;
       pointer-events: auto;
+      position: relative;
     }
     
     .pen-size-label {
@@ -206,6 +207,159 @@
     .pen-size-btn[data-size="16"] .pen-size-dot {
       width: 16px;
       height: 16px;
+    }
+    
+    /* 色選択パネル */
+    .color-panel {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      padding: 20px;
+      z-index: 2147483648;
+      min-width: 300px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      pointer-events: auto;
+    }
+    
+    .color-panel.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+    
+    .color-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+    
+    .color-panel-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+    }
+    
+    .color-panel-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #666;
+      padding: 5px;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    
+    .color-panel-close:hover {
+      background: #f0f0f0;
+    }
+    
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .color-panel-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: 2px solid #e0e0e0;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    
+    .color-panel-btn:hover {
+      transform: scale(1.1);
+      border-color: #999;
+    }
+    
+    .color-panel-btn.selected {
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0,123,255,0.3);
+    }
+    
+    .color-panel-btn.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      text-shadow: 0 0 3px rgba(0,0,0,0.5);
+    }
+    
+    .opacity-section-panel {
+      border-top: 1px solid #e0e0e0;
+      padding-top: 15px;
+    }
+    
+    .opacity-label-panel {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .opacity-slider-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .opacity-slider-panel {
+      flex: 1;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: linear-gradient(to right, transparent, #333);
+      border-radius: 3px;
+      outline: none;
+    }
+    
+    .opacity-slider-panel::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: #007bff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .opacity-slider-panel::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: #007bff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .opacity-value-panel {
+      font-size: 14px;
+      color: #333;
+      min-width: 50px;
+      text-align: center;
+      font-weight: bold;
     }
     
     .spacer {
@@ -287,9 +441,71 @@
     .expand-btn:hover {
       opacity: 0.8;
     }
+    
+    /* オーバーレイ */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 2147483647;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      pointer-events: auto;
+    }
+    
+    .overlay.show {
+      opacity: 1;
+      visibility: visible;
+    }
   </style>
 </head>
 <body>
+  <!-- オーバーレイ -->
+  <div id="overlay" class="overlay"></div>
+  
+  <!-- 色選択パネル -->
+  <div id="color-panel" class="color-panel">
+    <div class="color-panel-header">
+      <div class="color-panel-title">カラー</div>
+      <button id="color-panel-close" class="color-panel-close">×</button>
+    </div>
+    
+    <div class="color-grid">
+      <div class="color-panel-btn" data-color="#0066FF" style="background: #0066FF;"></div>
+      <div class="color-panel-btn" data-color="#00CC00" style="background: #00CC00;"></div>
+      <div class="color-panel-btn" data-color="#FFCC00" style="background: #FFCC00;"></div>
+      <div class="color-panel-btn" data-color="#FF6600" style="background: #FF6600;"></div>
+      <div class="color-panel-btn" data-color="#FF0000" style="background: #FF0000;"></div>
+      <div class="color-panel-btn" data-color="#CC0099" style="background: #CC0099;"></div>
+      
+      <div class="color-panel-btn" data-color="#00CCFF" style="background: #00CCFF;"></div>
+      <div class="color-panel-btn" data-color="#99FF66" style="background: #99FF66;"></div>
+      <div class="color-panel-btn" data-color="#FFFF00" style="background: #FFFF00;"></div>
+      <div class="color-panel-btn" data-color="#FFCC99" style="background: #FFCC99;"></div>
+      <div class="color-panel-btn" data-color="#FF9999" style="background: #FF9999;"></div>
+      <div class="color-panel-btn" data-color="#FF99FF" style="background: #FF99FF;"></div>
+      
+      <div class="color-panel-btn" data-color="#FFFFFF" style="background: #FFFFFF;"></div>
+      <div class="color-panel-btn" data-color="#CCCCCC" style="background: #CCCCCC;"></div>
+      <div class="color-panel-btn" data-color="#999999" style="background: #999999;"></div>
+      <div class="color-panel-btn" data-color="#666666" style="background: #666666;"></div>
+      <div class="color-panel-btn" data-color="#333333" style="background: #333333;"></div>
+      <div class="color-panel-btn" data-color="#000000" style="background: #000000;"></div>
+    </div>
+    
+    <div class="opacity-section-panel">
+      <div class="opacity-label-panel">不透明度</div>
+      <div class="opacity-slider-container">
+        <input type="range" id="opacity-slider-panel" class="opacity-slider-panel" min="0.1" max="1" step="0.1" value="1">
+        <div id="opacity-value-panel" class="opacity-value-panel">100%</div>
+      </div>
+    </div>
+  </div>
+
   <!-- 最小化状態 -->
   <div id="minimized-content" class="minimized-content hidden">
     <button id="expand-btn" class="expand-btn">展開</button>
@@ -366,178 +582,135 @@
   </div>
 
   <script>
-    // デモ用のJavaScript（実際の機能）
-    let currentPenSize = 4;
-    let currentColor = '#000000';
-    let currentOpacity = 0.7;
-    let isDrawing = true;
-    let isBarVisible = true;
+    // 色選択パネルの制御
+    let currentSelectedColor = '#000000';
+    let currentOpacity = 1.0;
     
-    // ペンサイズの変更
-    function changePenSize(size) {
-      currentPenSize = size;
-      console.log('ペンサイズ変更:', size);
-      
-      // ボタンの状態を更新
-      document.querySelectorAll('.pen-size-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.size == size);
+    const colorPanel = document.getElementById('color-panel');
+    const overlay = document.getElementById('overlay');
+    const colorPanelClose = document.getElementById('color-panel-close');
+    const opacitySliderPanel = document.getElementById('opacity-slider-panel');
+    const opacityValuePanel = document.getElementById('opacity-value-panel');
+    
+    // ペンサイズボタンにクリックイベントを追加
+    const penSizeBtns = document.querySelectorAll('.pen-size-btn');
+    penSizeBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 色選択パネルを表示
+        showColorPanel();
       });
-    }
-    
-    // 色の変更
-    function changeColor(color) {
-      currentColor = color;
-      console.log('色変更:', color);
-      
-      // ボタンの状態を更新
-      document.querySelectorAll('.color-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.color === color);
-      });
-    }
-    
-    // 透明度の変更
-    function changeOpacity(opacity) {
-      currentOpacity = opacity;
-      console.log('透明度変更:', opacity);
-      
-      // 表示を更新
-      const opacityValue = document.querySelector('#opacity-value');
-      if (opacityValue) {
-        opacityValue.textContent = Math.round(opacity * 100) + '%';
-      }
-    }
-    
-    // 描画の切り替え
-    function toggleDrawing() {
-      isDrawing = !isDrawing;
-      console.log('描画切り替え:', isDrawing);
-      
-      const toggleBtn = document.querySelector('#toggle-draw-btn');
-      if (toggleBtn) {
-        toggleBtn.textContent = `描画: ${isDrawing ? 'ON' : 'OFF'}`;
-        toggleBtn.className = `btn ${isDrawing ? 'btn-toggle-on' : 'btn-toggle-off'}`;
-      }
-    }
-    
-    // バーの表示/非表示切り替え
-    function toggleBarVisibility() {
-      isBarVisible = !isBarVisible;
-      console.log('バー表示切り替え:', isBarVisible);
-      
-      const expandedContent = document.querySelector('#expanded-content');
-      const minimizedContent = document.querySelector('#minimized-content');
-      
-      if (isBarVisible) {
-        expandedContent.classList.remove('hidden');
-        minimizedContent.classList.add('hidden');
-      } else {
-        expandedContent.classList.add('hidden');
-        minimizedContent.classList.remove('hidden');
-      }
-    }
-    
-    // イベントリスナーの設定
-    document.addEventListener('DOMContentLoaded', function() {
-      // ペンサイズボタン
-      document.querySelectorAll('.pen-size-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          changePenSize(parseInt(btn.dataset.size));
-        });
-      });
-      
-      // 色ボタン
-      document.querySelectorAll('.color-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          changeColor(btn.dataset.color);
-        });
-      });
-      
-      // 透明度スライダー
-      const opacitySlider = document.querySelector('#opacity-slider');
-      if (opacitySlider) {
-        opacitySlider.addEventListener('input', (e) => {
-          e.stopPropagation();
-          changeOpacity(parseFloat(e.target.value));
-        });
-      }
-      
-      // 描画切り替えボタン
-      const toggleDrawBtn = document.querySelector('#toggle-draw-btn');
-      if (toggleDrawBtn) {
-        toggleDrawBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleDrawing();
-        });
-      }
-      
-      // 最小化/展開ボタン
-      const minimizeBtn = document.querySelector('#minimize-btn');
-      if (minimizeBtn) {
-        minimizeBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleBarVisibility();
-        });
-      }
-      
-      const expandBtn = document.querySelector('#expand-btn');
-      if (expandBtn) {
-        expandBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleBarVisibility();
-        });
-      }
-      
-      // キャンバスクリアボタン
-      const clearBtn = document.querySelector('#clear-btn');
-      if (clearBtn) {
-        clearBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          console.log('キャンバスクリア');
-        });
-      }
-      
-      // 部屋作成ボタン
-      const createBtn = document.querySelector('#create-btn');
-      if (createBtn) {
-        createBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          console.log('新しい部屋を作成');
-        });
-      }
-      
-      // 部屋参加ボタン
-      const joinBtn = document.querySelector('#join-btn');
-      if (joinBtn) {
-        joinBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const roomInput = document.querySelector('#room-input');
-          const code = roomInput ? roomInput.value.trim() : '';
-          console.log('部屋に参加:', code);
-        });
-      }
-      
-      // 部屋退出ボタン
-      const leaveBtn = document.querySelector('#leave-btn');
-      if (leaveBtn) {
-        leaveBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          console.log('部屋から退出');
-        });
-      }
-      
-      console.log('お絵描きUI初期化完了');
     });
+    
+    // 色選択パネルのボタンイベント
+    const colorPanelBtns = document.querySelectorAll('.color-panel-btn');
+    colorPanelBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 選択状態を更新
+        colorPanelBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        
+        // 色を設定
+        currentSelectedColor = btn.dataset.color;
+        
+        // メインの色ボタンも更新
+        const mainColorBtns = document.querySelectorAll('.color-btn');
+        mainColorBtns.forEach(b => b.classList.remove('active'));
+        
+        // 対応する色があれば選択
+        const matchingBtn = document.querySelector(`.color-btn[data-color="${currentSelectedColor}"]`);
+        if (matchingBtn) {
+          matchingBtn.classList.add('active');
+        }
+        
+        console.log('色を選択:', currentSelectedColor);
+      });
+    });
+    
+    // 透明度スライダーのイベント
+    if (opacitySliderPanel) {
+      opacitySliderPanel.addEventListener('input', (e) => {
+        currentOpacity = parseFloat(e.target.value);
+        opacityValuePanel.textContent = Math.round(currentOpacity * 100) + '%';
+        
+        // メインの透明度スライダーも更新
+        const mainOpacitySlider = document.getElementById('opacity-slider');
+        const mainOpacityValue = document.getElementById('opacity-value');
+        if (mainOpacitySlider) {
+          mainOpacitySlider.value = currentOpacity;
+        }
+        if (mainOpacityValue) {
+          mainOpacityValue.textContent = Math.round(currentOpacity * 100) + '%';
+        }
+        
+        console.log('透明度を変更:', currentOpacity);
+      });
+    }
+    
+    // パネルを表示
+    function showColorPanel() {
+      // 現在の色を選択状態にする
+      colorPanelBtns.forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.color === currentSelectedColor);
+      });
+      
+      // 現在の透明度を設定
+      if (opacitySliderPanel) {
+        opacitySliderPanel.value = currentOpacity;
+        opacityValuePanel.textContent = Math.round(currentOpacity * 100) + '%';
+      }
+      
+      overlay.classList.add('show');
+      colorPanel.classList.add('show');
+    }
+    
+    // パネルを非表示
+    function hideColorPanel() {
+      overlay.classList.remove('show');
+      colorPanel.classList.remove('show');
+    }
+    
+    // 閉じるボタンのイベント
+    if (colorPanelClose) {
+      colorPanelClose.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        hideColorPanel();
+      });
+    }
+    
+    // オーバーレイクリックで閉じる
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        hideColorPanel();
+      });
+    }
+    
+    // ESCキーで閉じる
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        hideColorPanel();
+      }
+    });
+    
+    // 初期化：現在の色を取得
+    const activeColorBtn = document.querySelector('.color-btn.active');
+    if (activeColorBtn) {
+      currentSelectedColor = activeColorBtn.dataset.color;
+    }
+    
+    // 初期化：現在の透明度を取得
+    const mainOpacitySlider = document.getElementById('opacity-slider');
+    if (mainOpacitySlider) {
+      currentOpacity = parseFloat(mainOpacitySlider.value);
+    }
   </script>
 </body>
 </html>

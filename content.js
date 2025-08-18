@@ -8,6 +8,7 @@ class SharedDrawing {
     this.userCount = 0;
     this.isInitialized = false;
     this.currentPenSize = 4;
+    this.colorPanelVisible = false;
     
     // WebSocketマネージャーを初期化
     this.wsManager = new WebSocketManager(
@@ -63,8 +64,8 @@ class SharedDrawing {
       }, 500);
 
       // ペンサイズ設定を読み込み
-    this.currentPenSize = result.currentPenSize || 4;
-    this.canvasManager.setPenSize(this.currentPenSize);
+      this.currentPenSize = result.currentPenSize || 4;
+      this.canvasManager.setPenSize(this.currentPenSize);
       
     } catch (error) {
       console.error('初期化エラー:', error);
@@ -206,6 +207,7 @@ class SharedDrawing {
       btn.classList.toggle('active', btn.dataset.size == this.currentPenSize);
     });
   }
+
   updateBodyPadding() {
     if (!document.body) return;
     
@@ -326,17 +328,120 @@ class SharedDrawing {
       });
     }
 
-    // ペンサイズボタンのイベントリスナー
+    // ペンサイズボタンのイベントリスナー（色パネル表示用に変更）
     const penSizeBtns = self.controlBar.querySelectorAll('.pen-size-btn');
     penSizeBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        self.changePenSize(parseInt(btn.dataset.size));
+        self.showColorPanel();
       });
     });
 
+    // 色選択パネル関連のイベント
+    self.setupColorPanelEvents();
+  }
+
+  // 色選択パネルのイベント設定
+  setupColorPanelEvents() {
+    const self = this;
+    const colorPanel = self.controlBar.querySelector('#color-panel');
+    const overlay = self.controlBar.querySelector('#overlay');
+    const colorPanelClose = self.controlBar.querySelector('#color-panel-close');
+    const opacitySliderPanel = self.controlBar.querySelector('#opacity-slider-panel');
+    const opacityValuePanel = self.controlBar.querySelector('#opacity-value-panel');
     
+    // 色選択パネルのボタンイベント
+    const colorPanelBtns = self.controlBar.querySelectorAll('.color-panel-btn');
+    colorPanelBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 選択状態を更新
+        colorPanelBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        
+        // 色を変更
+        self.changeColor(btn.dataset.color);
+      });
+    });
+    
+    // 透明度スライダーのイベント
+    if (opacitySliderPanel) {
+      opacitySliderPanel.addEventListener('input', (e) => {
+        const opacity = parseFloat(e.target.value);
+        self.changeOpacity(opacity);
+        
+        // パネル内の表示も更新
+        if (opacityValuePanel) {
+          opacityValuePanel.textContent = Math.round(opacity * 100) + '%';
+        }
+      });
+    }
+    
+    // 閉じるボタンのイベント
+    if (colorPanelClose) {
+      colorPanelClose.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        self.hideColorPanel();
+      });
+    }
+    
+    // オーバーレイクリックで閉じる
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        self.hideColorPanel();
+      });
+    }
+    
+    // ESCキーで閉じる
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && self.colorPanelVisible) {
+        self.hideColorPanel();
+      }
+    });
+  }
+
+  // 色選択パネルを表示
+  showColorPanel() {
+    const colorPanel = this.controlBar.querySelector('#color-panel');
+    const overlay = this.controlBar.querySelector('#overlay');
+    const colorPanelBtns = this.controlBar.querySelectorAll('.color-panel-btn');
+    const opacitySliderPanel = this.controlBar.querySelector('#opacity-slider-panel');
+    const opacityValuePanel = this.controlBar.querySelector('#opacity-value-panel');
+    
+    if (!colorPanel || !overlay) return;
+    
+    // 現在の色を選択状態にする
+    colorPanelBtns.forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.color === this.canvasManager.currentColor);
+    });
+    
+    // 現在の透明度を設定
+    if (opacitySliderPanel && opacityValuePanel) {
+      opacitySliderPanel.value = this.canvasManager.currentOpacity;
+      opacityValuePanel.textContent = Math.round(this.canvasManager.currentOpacity * 100) + '%';
+    }
+    
+    overlay.classList.add('show');
+    colorPanel.classList.add('show');
+    this.colorPanelVisible = true;
+  }
+
+  // 色選択パネルを非表示
+  hideColorPanel() {
+    const colorPanel = this.controlBar.querySelector('#color-panel');
+    const overlay = this.controlBar.querySelector('#overlay');
+    
+    if (!colorPanel || !overlay) return;
+    
+    overlay.classList.remove('show');
+    colorPanel.classList.remove('show');
+    this.colorPanelVisible = false;
   }
 
   // ペンサイズ変更メソッド
@@ -372,7 +477,6 @@ class SharedDrawing {
         case 'CHANGE_PEN_SIZE':
           this.changePenSize(message.size);
           break;
-        
       }
     });
   }
@@ -505,12 +609,26 @@ class SharedDrawing {
     this.canvasManager.setColor(color);
     await chrome.storage.local.set({ currentColor: color });
     this.updateBarState();
+    
+    // 色選択パネル内の選択状態も更新
+    const colorPanelBtns = this.controlBar.querySelectorAll('.color-panel-btn');
+    colorPanelBtns.forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.color === color);
+    });
   }
 
   async changeOpacity(opacity) {
     this.canvasManager.setOpacity(opacity);
     await chrome.storage.local.set({ currentOpacity: opacity });
     this.updateBarState();
+    
+    // パネル内の透明度表示も更新
+    const opacitySliderPanel = this.controlBar.querySelector('#opacity-slider-panel');
+    const opacityValuePanel = this.controlBar.querySelector('#opacity-value-panel');
+    if (opacitySliderPanel && opacityValuePanel) {
+      opacitySliderPanel.value = opacity;
+      opacityValuePanel.textContent = Math.round(opacity * 100) + '%';
+    }
   }
 
   async toggleDrawing(enabled) {
