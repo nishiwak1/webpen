@@ -82,16 +82,27 @@
     .btn {
       border: none;
       color: white;
-      padding: 3px 8px;
+      padding: 5px 12px;
       border-radius: 10px;
       cursor: pointer;
       font-size: 10px;
+      font-weight: bold;
       pointer-events: auto;
-      transition: opacity 0.2s;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 28px;
+      min-width: fit-content;
     }
     
     .btn:hover {
       opacity: 0.8;
+      transform: translateY(-1px);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
     }
     
     .btn-join { background: #4CAF50; }
@@ -102,38 +113,96 @@
     .btn-clear { background: #ff9800; }
     .btn-minimize { background: rgba(255,255,255,0.2); }
     
-    .color-section {
+    /* ツールセクション */
+    .tools-section {
       display: flex;
       align-items: center;
-      gap: 5px;
-      pointer-events: auto;
-    }
-    
-    .color-label {
-      font-size: 10px;
-    }
-    
-    .color-palette {
-      display: flex;
       gap: 8px;
+      pointer-events: auto;
+      background: rgba(255,255,255,0.1);
+      padding: 5px 10px;
+      border-radius: 20px;
     }
     
-    .color-btn {
-      width: 35px;
-      height: 35px;
-      border-radius: 50%;
-      border: 2px solid transparent;
+    .tools-label {
+      font-size: 10px;
+      margin-right: 5px;
+    }
+    
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 2px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.2);
       cursor: pointer;
       pointer-events: auto;
-      transition: transform 0.2s;
+      transition: all 0.2s;
+      font-size: 14px;
     }
     
-    .color-btn:hover {
+    .tool-btn:hover {
       transform: scale(1.1);
+      border-color: rgba(255,255,255,0.6);
+      background: rgba(255,255,255,0.3);
     }
     
-    .color-btn.active {
+    .tool-btn.active {
       border-color: white;
+      background: rgba(255,255,255,0.4);
+      box-shadow: 0 0 8px rgba(255,255,255,0.5);
+    }
+    
+    .tool-btn.eraser {
+      background: rgba(255,255,255,0.3);
+    }
+    
+    .tool-btn.eraser.active {
+      background: rgba(255,255,255,0.5);
+    }
+    
+    /* 操作ボタン */
+    .action-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: bold;
+      pointer-events: auto;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .action-btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: translateY(-1px);
+    }
+    
+    .action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .action-btn:disabled:hover {
+      background: rgba(255,255,255,0.2);
+      transform: none;
+    }
+    
+    .action-btn.clear-all {
+      background: rgba(255,107,107,0.8);
+    }
+    
+    .action-btn.clear-all:hover {
+      background: rgba(255,107,107,1);
     }
     
     /* ペンの太さ選択セクション */
@@ -532,16 +601,26 @@
       <button id="leave-btn" class="btn btn-leave">退出</button>
     </div>
     
-    <div class="color-section">
-      <span class="color-label">色:</span>
-      <div class="color-palette">
-        <div class="color-btn active" data-color="#000000" style="background: #000000;"></div>
-        <div class="color-btn" data-color="#ff0000" style="background: #ff0000;"></div>
-        <div class="color-btn" data-color="#00ff00" style="background: #00ff00;"></div>
-        <div class="color-btn" data-color="#0000ff" style="background: #0000ff;"></div>
-        <div class="color-btn" data-color="#ffff00" style="background: #ffff00;"></div>
-        <div class="color-btn" data-color="#ff00ff" style="background: #ff00ff;"></div>
+    <!-- ツールセクション -->
+    <div class="tools-section">
+      <span class="tools-label">ツール:</span>
+      <div id="pen-tool" class="tool-btn active" title="ペン" data-tool="pen">
+        ✏️
       </div>
+      <div id="eraser-tool" class="tool-btn eraser" title="消しゴム" data-tool="eraser">
+        🗑️
+      </div>
+    </div>
+
+    <!-- アクション操作 -->
+    <div class="tools-section">
+      <span class="tools-label">操作:</span>
+      <button id="undo-btn" class="action-btn" title="元に戻す" disabled>
+        ⬅️ 戻す
+      </button>
+      <button id="redo-btn" class="action-btn" title="やり直し" disabled>
+        ➡️ 進む
+      </button>
     </div>
     
     <!-- ペンの太さ選択セクション -->
@@ -580,137 +659,5 @@
     
     <button id="minimize-btn" class="btn btn-minimize">最小化</button>
   </div>
-
-  <script>
-    // 色選択パネルの制御
-    let currentSelectedColor = '#000000';
-    let currentOpacity = 1.0;
-    
-    const colorPanel = document.getElementById('color-panel');
-    const overlay = document.getElementById('overlay');
-    const colorPanelClose = document.getElementById('color-panel-close');
-    const opacitySliderPanel = document.getElementById('opacity-slider-panel');
-    const opacityValuePanel = document.getElementById('opacity-value-panel');
-    
-    // ペンサイズボタンにクリックイベントを追加
-    const penSizeBtns = document.querySelectorAll('.pen-size-btn');
-    penSizeBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // 色選択パネルを表示
-        showColorPanel();
-      });
-    });
-    
-    // 色選択パネルのボタンイベント
-    const colorPanelBtns = document.querySelectorAll('.color-panel-btn');
-    colorPanelBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // 選択状態を更新
-        colorPanelBtns.forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        
-        // 色を設定
-        currentSelectedColor = btn.dataset.color;
-        
-        // メインの色ボタンも更新
-        const mainColorBtns = document.querySelectorAll('.color-btn');
-        mainColorBtns.forEach(b => b.classList.remove('active'));
-        
-        // 対応する色があれば選択
-        const matchingBtn = document.querySelector(`.color-btn[data-color="${currentSelectedColor}"]`);
-        if (matchingBtn) {
-          matchingBtn.classList.add('active');
-        }
-        
-        console.log('色を選択:', currentSelectedColor);
-      });
-    });
-    
-    // 透明度スライダーのイベント
-    if (opacitySliderPanel) {
-      opacitySliderPanel.addEventListener('input', (e) => {
-        currentOpacity = parseFloat(e.target.value);
-        opacityValuePanel.textContent = Math.round(currentOpacity * 100) + '%';
-        
-        // メインの透明度スライダーも更新
-        const mainOpacitySlider = document.getElementById('opacity-slider');
-        const mainOpacityValue = document.getElementById('opacity-value');
-        if (mainOpacitySlider) {
-          mainOpacitySlider.value = currentOpacity;
-        }
-        if (mainOpacityValue) {
-          mainOpacityValue.textContent = Math.round(currentOpacity * 100) + '%';
-        }
-        
-        console.log('透明度を変更:', currentOpacity);
-      });
-    }
-    
-    // パネルを表示
-    function showColorPanel() {
-      // 現在の色を選択状態にする
-      colorPanelBtns.forEach(btn => {
-        btn.classList.toggle('selected', btn.dataset.color === currentSelectedColor);
-      });
-      
-      // 現在の透明度を設定
-      if (opacitySliderPanel) {
-        opacitySliderPanel.value = currentOpacity;
-        opacityValuePanel.textContent = Math.round(currentOpacity * 100) + '%';
-      }
-      
-      overlay.classList.add('show');
-      colorPanel.classList.add('show');
-    }
-    
-    // パネルを非表示
-    function hideColorPanel() {
-      overlay.classList.remove('show');
-      colorPanel.classList.remove('show');
-    }
-    
-    // 閉じるボタンのイベント
-    if (colorPanelClose) {
-      colorPanelClose.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        hideColorPanel();
-      });
-    }
-    
-    // オーバーレイクリックで閉じる
-    if (overlay) {
-      overlay.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        hideColorPanel();
-      });
-    }
-    
-    // ESCキーで閉じる
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        hideColorPanel();
-      }
-    });
-    
-    // 初期化：現在の色を取得
-    const activeColorBtn = document.querySelector('.color-btn.active');
-    if (activeColorBtn) {
-      currentSelectedColor = activeColorBtn.dataset.color;
-    }
-    
-    // 初期化：現在の透明度を取得
-    const mainOpacitySlider = document.getElementById('opacity-slider');
-    if (mainOpacitySlider) {
-      currentOpacity = parseFloat(mainOpacitySlider.value);
-    }
-  </script>
 </body>
 </html>
