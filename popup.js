@@ -94,70 +94,59 @@
         };
         
         this.ws.onmessage = (event) => {
-          console.log('📨 WebSocket RAW受信データ:', event.data);
-          console.log('📨 データ型:', typeof event.data);
-          console.log('📨 データ長:', event.data.length);
+          console.log('📨 WebSocket RAWメッセージ受信:', event.data);
           
           try {
             const data = JSON.parse(event.data);
-            console.log('📨 JSONパース成功 - 構造:', data);
-            console.log('📨 data.type:', data.type);
-            console.log('📨 data.action:', data.action);
+            console.log('📨 JSONパース成功:', data);
             
             // AWS WebSocketの場合、メッセージがネストされている可能性がある
             let actualMessage = data;
             
             // AWS API Gatewayの場合のメッセージ構造を確認
             if (data.Records && Array.isArray(data.Records)) {
-              console.log('📨 AWS Records形式を検出');
+              console.log('AWS Records形式を検出');
               actualMessage = data.Records[0];
-              console.log('📨 Records内容:', actualMessage);
             } else if (data.body) {
-              console.log('📨 AWS body形式を検出');
-              console.log('📨 body内容:', data.body);
+              console.log('AWS body形式を検出');
               try {
                 actualMessage = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
-                console.log('📨 body解析結果:', actualMessage);
               } catch (e) {
-                console.log('📨 body解析に失敗、元のdataを使用');
+                console.log('body解析に失敗、元のdataを使用');
                 actualMessage = data;
               }
             } else if (data.message) {
-              console.log('📨 message プロパティを検出');
+              console.log('message プロパティを検出');
               actualMessage = data.message;
             }
             
-            // 最終的なメッセージを確認
-            console.log('📨 最終処理メッセージ:', actualMessage);
-            console.log('📨 最終メッセージtype:', actualMessage.type);
-            
-            // メッセージが空でないことを確認
-            if (!actualMessage || typeof actualMessage !== 'object') {
-              console.error('❌ 無効なメッセージ:', actualMessage);
-              return;
+            // データ構造の詳細ログ
+            if (actualMessage.type === 'drawData') {
+              console.log('🔍 drawDataの詳細構造:');
+              console.log('  - actualMessage:', actualMessage);
+              console.log('  - actualMessage type:', typeof actualMessage);
+              
+              // 全プロパティをチェック
+              Object.keys(actualMessage).forEach(key => {
+                console.log(`  - ${key}:`, actualMessage[key]);
+              });
             }
-            
-            // handleWebSocketMessageに渡す前にもう一度確認
-            console.log('📨 handleWebSocketMessageに渡すメッセージ:', actualMessage);
             
             this.onMessage(actualMessage);
             
           } catch (error) {
-            console.error('❌ WebSocket受信エラー:', error);
-            console.error('❌ 問題のあるRAWデータ:', event.data);
-            console.error('❌ エラースタック:', error.stack);
+            console.error('❌ メッセージ解析エラー:', error);
+            console.error('問題のあるRAWデータ:', event.data);
+            console.error('データ長:', event.data.length);
+            console.error('データの最初の100文字:', event.data.substring(0, 100));
             
             // 解析に失敗した場合でも、可能な限り処理を続行
             try {
-              console.log('🔄 フォールバック処理を試行');
-              const fallbackData = { 
-                type: 'parseError', 
-                rawData: event.data,
-                error: error.message 
-              };
+              // 文字列として直接解析を試行
+              const fallbackData = { type: 'unknown', rawData: event.data };
               this.onMessage(fallbackData);
             } catch (fallbackError) {
-              console.error('❌ フォールバック処理も失敗:', fallbackError);
+              console.error('フォールバック処理も失敗:', fallbackError);
             }
           }
         };
@@ -250,7 +239,7 @@
       this.isEnabled = true;
       this.currentColor = '#000000';
       this.currentOpacity = 0.7;
-      this.currentPenSize = 12;
+      this.currentPenSize = 4;
       this.currentTool = 'pen';
       this.onDraw = onDraw;
       this.currentStroke = null;
@@ -288,23 +277,16 @@
       this.canvas.width = window.innerWidth;
       this.canvas.height = window.innerHeight - (isBarVisible ? 60 : 0);
       
-      // willReadFrequently属性を設定してgetImageDataの性能を向上
-      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+      this.ctx = this.canvas.getContext('2d');
       this.setupCanvasEvents();
       
       document.body.appendChild(this.canvas);
       
       window.addEventListener('resize', () => {
-        // 🔧 willReadFrequently属性でコンテキストを作成し直してgetImageData警告を解消
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.canvas.width;
-        tempCanvas.height = this.canvas.height;
-        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-        tempCtx.drawImage(this.canvas, 0, 0);
-        
+        const oldImageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight - (isBarVisible ? 60 : 0);
-        this.ctx.drawImage(tempCanvas, 0, 0);
+        this.ctx.putImageData(oldImageData, 0, 0);
       });
     }
 
@@ -525,7 +507,6 @@
     eraseAtPoint(point, size) {
       if (!this.ctx || !point) return;
       
-      this.ctx.save();
       this.ctx.globalCompositeOperation = 'destination-out';
       this.ctx.globalAlpha = 1.0;
       this.ctx.fillStyle = 'rgba(0,0,0,1)';
@@ -534,25 +515,7 @@
       this.ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
       this.ctx.fill();
       
-      this.ctx.restore();
-    }
-
-    // 受信した消しゴムデータを適用する専用メソッド
-    eraseWithSettings(point, size) {
-      if (!this.ctx || !point) return;
-      
-      console.log('🗑️ 受信消しゴム適用:', { point, size });
-      
-      this.ctx.save();
-      this.ctx.globalCompositeOperation = 'destination-out';
-      this.ctx.globalAlpha = 1.0;
-      this.ctx.fillStyle = 'rgba(0,0,0,1)';
-      
-      this.ctx.beginPath();
-      this.ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
-      this.ctx.fill();
-      
-      this.ctx.restore();
+      this.ctx.globalCompositeOperation = 'source-over';
     }
 
     clear() {
@@ -595,7 +558,6 @@
 
     getCanvasData() {
       if (this.canvas) {
-        // toDataURL()を使用してgetImageDataの警告を回避
         return this.canvas.toDataURL();
       }
       return null;
@@ -621,7 +583,7 @@
       this.currentRoom = null;
       this.userCount = 0;
       this.isInitialized = false;
-      this.currentPenSize = 12;
+      this.currentPenSize = 4;
       this.colorPanelVisible = false;
       this.currentTool = 'pen';
       this.drawingHistory = [];
@@ -660,6 +622,8 @@
         this.currentRoom = result.currentRoom;
         this.isBarVisible = result.isBarVisible !== false;
         this.currentPenSize = result.currentPenSize || 4;
+        // デフォルトをペンツールに設定
+        this.currentTool = result.currentTool || 'pen';
         
         this.canvasManager.setEnabled(result.isDrawing !== false);
         this.canvasManager.setColor(result.currentColor || '#000000');
@@ -1132,7 +1096,10 @@
       const penSizeSliderPanel = this.controlBar.querySelector('#pen-size-slider-panel');
       const penSizeValuePanel = this.controlBar.querySelector('#pen-size-value-panel');
       
-      
+      if (!colorPanel || !overlay) {
+        console.log('カラーパネルまたはオーバーレイが見つかりません');
+        return;
+      }
       
       // 現在の色を選択状態にする
       colorPanelBtns.forEach(btn => {
@@ -1157,7 +1124,7 @@
       colorPanel.classList.add('show');
       this.colorPanelVisible = true;
       
-      
+      console.log('カラーパネルを表示しました');
     }
 
     hideColorPanel() {
@@ -1174,64 +1141,19 @@
     }
 
     async changeTool(tool) {
-      console.log('🔧 ツール変更開始:', { from: this.currentTool, to: tool });
-      console.log('🔧 変更前の状態:');
-      console.log('  - this.currentTool:', this.currentTool);
-      console.log('  - this.canvasManager.currentTool:', this.canvasManager.currentTool);
-      
       this.currentTool = tool;
       this.canvasManager.setTool(tool);
       
-      console.log('🔧 変更後の状態:');
-      console.log('  - this.currentTool:', this.currentTool);
-      console.log('  - this.canvasManager.currentTool:', this.canvasManager.currentTool);
-      
-      // 🔧 消しゴムの場合はサイズを固定12pxに設定
-      if (tool === 'eraser') {
-        console.log('🗑️ 消しゴムモード：サイズを12pxに固定');
-        this.currentPenSize = 12;
-        this.canvasManager.setPenSize(12);
-        
-        // UIも更新
-        const penSizeSlider = this.controlBar?.querySelector('#pen-size-slider');
-        const penSizeValue = this.controlBar?.querySelector('#pen-size-value');
-        const penSizeSliderPanel = this.controlBar?.querySelector('#pen-size-slider-panel');
-        const penSizeValuePanel = this.controlBar?.querySelector('#pen-size-value-panel');
-        
-        if (penSizeSlider) penSizeSlider.value = 12;
-        if (penSizeValue) penSizeValue.textContent = '12px';
-        if (penSizeSliderPanel) penSizeSliderPanel.value = 12;
-        if (penSizeValuePanel) penSizeValuePanel.textContent = '12px';
-      }
-      
       try {
-        await chrome.storage.local.set({ 
-          currentTool: tool,
-          currentPenSize: this.currentPenSize  // サイズも保存
-        });
+        await chrome.storage.local.set({ currentTool: tool });
       } catch (error) {
         console.log('ストレージ保存エラー (拡張機能コンテキスト無効化):', error);
       }
       
       this.updateBarState();
       
-      // 🔧 ツール変更を他のクライアントに即座に通知
+      // ツール変更を他のクライアントに通知
       if (this.wsManager.isConnected()) {
-        const toolChangeNotification = {
-          action: 'toolChange',
-          type: 'toolChange',
-          roomId: this.currentRoom,
-          tool: tool,
-          penSize: this.currentPenSize,
-          color: this.canvasManager.currentColor,
-          opacity: this.canvasManager.currentOpacity,
-          timestamp: Date.now()
-        };
-        
-        console.log('📤 ツール変更通知送信:', toolChangeNotification);
-        this.wsManager.send(toolChangeNotification);
-        
-        // さらに設定更新も送信（互換性のため）
         this.wsManager.send({
           action: 'settingsUpdate',
           roomId: this.currentRoom,
@@ -1243,8 +1165,6 @@
           }
         });
       }
-      
-      console.log('✅ ツール変更完了:', { tool, penSize: this.currentPenSize });
     }
 
     async changePenSize(size) {
@@ -1371,7 +1291,7 @@
       });
     }
 
-    // 修正版のhandleLocalDraw - ツール情報を確実に送信（デバッグ強化）
+    // 修正版のhandleLocalDraw - 1枚目と2枚目の両方の形式に対応
     handleLocalDraw(drawData) {
       this.saveToHistory();
       
@@ -1382,13 +1302,13 @@
       }
 
       if (drawData.type === 'stroke' && drawData.stroke) {
+        // データの検証を追加
         const stroke = drawData.stroke;
         
         console.log('🔍 送信前データ検証:');
         console.log('  - stroke:', stroke);
-        console.log('  - stroke.tool:', stroke.tool);
-        console.log('  - this.currentTool:', this.currentTool);
-        console.log('  - canvasManager.currentTool:', this.canvasManager.currentTool);
+        console.log('  - stroke.points:', stroke.points);
+        console.log('  - stroke.points length:', stroke.points ? stroke.points.length : 'undefined');
         
         if (!stroke.points || !Array.isArray(stroke.points) || stroke.points.length === 0) {
           console.error('❌ 送信データが無効:', stroke);
@@ -1417,16 +1337,8 @@
         
         console.log(`✅ 有効ポイント: ${validPoints.length}/${stroke.points.length}`);
         
-        // ツール情報を確実に設定（優先順位付き）
-        const toolToSend = stroke.tool || this.canvasManager.currentTool || this.currentTool || 'pen';
-        
-        console.log('🎯 ツール情報確認:');
-        console.log('  - stroke.tool:', stroke.tool);
-        console.log('  - this.canvasManager.currentTool:', this.canvasManager.currentTool);
-        console.log('  - this.currentTool:', this.currentTool);
-        console.log('  - 最終選択されたtool:', toolToSend);
-        
         // より互換性の高い送信形式を選択
+        // AWS WebSocketの場合は、actionプロパティが必要
         const payload = {
           action: 'drawData',
           type: 'drawData',
@@ -1437,27 +1349,12 @@
                   this.canvasManager.currentOpacity !== undefined ? this.canvasManager.currentOpacity : 0.7,
           penSize: stroke.penSize !== undefined ? stroke.penSize : 
                   this.currentPenSize !== undefined ? this.currentPenSize : 4,
-          tool: toolToSend, // ここを確実に設定
+          tool: stroke.tool || this.currentTool || 'pen',
           startTime: stroke.startTime || Date.now(),
           timestamp: Date.now()
         };
-
-        // 🔧 送信前に最終チェック
-        console.log('🔍 送信前最終チェック:');
-        console.log('  - payload.tool:', payload.tool);
-        console.log('  - this.currentTool:', this.currentTool);
-        console.log('  - this.canvasManager.currentTool:', this.canvasManager.currentTool);
-        console.log('  - stroke.tool:', stroke.tool);
-
-        // 🔧 ツール情報が確実に設定されているかチェック
-        if (!payload.tool || payload.tool === 'undefined') {
-          console.warn('⚠️ ツール情報が無効、強制的にcurrentToolを設定');
-          payload.tool = this.currentTool || 'pen';
-        }
-
-        console.log('🔧 最終送信tool:', payload.tool);
         
-        console.log('📤 送信データ構造確認（ツール情報付き）:');
+        console.log('📤 送信データ構造確認（互換形式）:');
         console.log('  - action:', payload.action);
         console.log('  - type:', payload.type);
         console.log('  - roomId:', payload.roomId);
@@ -1465,16 +1362,14 @@
         console.log('  - penSize:', payload.penSize);
         console.log('  - color:', payload.color);
         console.log('  - opacity:', payload.opacity);
-        console.log('  - tool:', payload.tool); // ツール情報をログ出力
-        console.log('  - tool === "eraser":', payload.tool === 'eraser');
-        console.log('  - typeof tool:', typeof payload.tool);
+        console.log('  - tool:', payload.tool);
         console.log('  - 最初のpoint:', payload.points[0]);
         console.log('  - 最後のpoint:', payload.points[payload.points.length - 1]);
-        console.log('  - 送信JSON全体:', JSON.stringify(payload, null, 2));
+        console.log('  - 送信JSON:', JSON.stringify(payload));
         
         const success = this.wsManager.send(payload);
         if (success) {
-          console.log('✅ データ送信成功（ツール:', toolToSend, '）');
+          console.log('✅ データ送信成功');
         } else {
           console.error('❌ データ送信失敗');
         }
@@ -1490,24 +1385,9 @@
       this.updateBarState();
     }
 
-    // 修正版のWebSocketメッセージ処理 - ツール変更通知とサイズ固定を追加
+    // 修正版のWebSocketメッセージ処理 - 1枚目と2枚目の両方の形式に対応
     handleWebSocketMessage(message) {
-      console.log('🎯 handleWebSocketMessage開始');
-      console.log('🎯 受信メッセージ全体:', message);
-      console.log('🎯 message.type:', message.type);
-      console.log('🎯 message.action:', message.action);
-      
-      // typeがundefinedの場合の対処
-      if (!message.type) {
-        console.warn('⚠️ message.typeがundefined - actionをtypeとして使用を試行');
-        if (message.action) {
-          message.type = message.action;
-          console.log('🔄 actionをtypeに設定:', message.type);
-        } else {
-          console.error('❌ typeもactionも存在しない:', message);
-          return;
-        }
-      }
+      console.log('📥 受信メッセージ全体:', message);
       
       switch (message.type) {
         case 'roomJoined':
@@ -1526,139 +1406,32 @@
           }
           break;
 
-        case 'toolChange':
-          console.log('🔧 ツール変更通知受信:', message);
-          
-          if (message.tool !== undefined) {
-            console.log('🔧 相手のツール変更を自分にも反映:', message.tool);
-            
-            // 🔧 相手のツール変更を自分の設定にも反映
-            this.currentTool = message.tool;
-            this.canvasManager.setTool(message.tool);
-            
-            // 消しゴムの場合はサイズも12pxに固定
-            if (message.tool === 'eraser') {
-              this.currentPenSize = 12;
-              this.canvasManager.setPenSize(12);
-              console.log('🗑️ 相手の消しゴム変更を受信：自分も消しゴム12pxに変更');
-              
-              // UIも更新
-              const penSizeSlider = this.controlBar?.querySelector('#pen-size-slider');
-              const penSizeValue = this.controlBar?.querySelector('#pen-size-value');
-              const penSizeSliderPanel = this.controlBar?.querySelector('#pen-size-slider-panel');
-              const penSizeValuePanel = this.controlBar?.querySelector('#pen-size-value-panel');
-              
-              if (penSizeSlider) penSizeSlider.value = 12;
-              if (penSizeValue) penSizeValue.textContent = '12px';
-              if (penSizeSliderPanel) penSizeSliderPanel.value = 12;
-              if (penSizeValuePanel) penSizeValuePanel.textContent = '12px';
-            }
-            
-            // ペンの場合は相手のサイズに合わせる
-            if (message.tool === 'pen' && message.penSize !== undefined) {
-              this.currentPenSize = message.penSize;
-              this.canvasManager.setPenSize(message.penSize);
-              console.log('✏️ 相手のペン変更を受信：自分もペン', message.penSize, 'pxに変更');
-              
-              // UIも更新
-              const penSizeSlider = this.controlBar?.querySelector('#pen-size-slider');
-              const penSizeValue = this.controlBar?.querySelector('#pen-size-value');
-              const penSizeSliderPanel = this.controlBar?.querySelector('#pen-size-slider-panel');
-              const penSizeValuePanel = this.controlBar?.querySelector('#pen-size-value-panel');
-              
-              if (penSizeSlider) penSizeSlider.value = message.penSize;
-              if (penSizeValue) penSizeValue.textContent = message.penSize + 'px';
-              if (penSizeSliderPanel) penSizeSliderPanel.value = message.penSize;
-              if (penSizeValuePanel) penSizeValuePanel.textContent = message.penSize + 'px';
-            }
-            
-            // 色と透明度も同期
-            if (message.color !== undefined) {
-              this.canvasManager.setColor(message.color);
-              console.log('🎨 相手の色変更を受信:', message.color);
-            }
-            
-            if (message.opacity !== undefined) {
-              this.canvasManager.setOpacity(message.opacity);
-              console.log('💧 相手の透明度変更を受信:', message.opacity);
-            }
-            
-            // ストレージも更新
-            try {
-              chrome.storage.local.set({ 
-                currentTool: message.tool,
-                currentPenSize: this.currentPenSize,
-                currentColor: message.color || this.canvasManager.currentColor,
-                currentOpacity: message.opacity || this.canvasManager.currentOpacity
-              });
-            } catch (error) {
-              console.log('ストレージ保存エラー:', error);
-            }
-            
-            // UIを更新
-            this.updateBarState();
-            
-            console.log('✅ 相手のツール変更を完全同期完了:', {
-              tool: this.currentTool,
-              penSize: this.currentPenSize,
-              color: this.canvasManager.currentColor,
-              opacity: this.canvasManager.currentOpacity
-            });
-          }
-          
-          break;
-
         case 'drawData':
           console.log('📥 線データ受信開始');
           console.log('📥 受信メッセージの完全構造:', JSON.stringify(message, null, 2));
           
-          // 🔍 デバッグ：受信データのツール情報を確認
-          console.log('🔍 RAWツール情報チェック:');
-          console.log('  - message.tool:', message.tool);
-          console.log('  - message.data?.tool:', message.data?.tool);
-          console.log('  - message.stroke?.tool:', message.stroke?.tool);
-          
-          // ✨ ツール情報の抽出を改善
+          // データの取得方法を改善 - 複数パターンに対応
           let strokeData = null;
-          let extractedTool = null;
           
-          // まず受信データからツール情報を抽出（優先順位付き）
-          extractedTool = message.tool || message.data?.tool || message.stroke?.tool;
-          
-          console.log('🎯 受信データから抽出されたツール:', extractedTool);
-          
-          // データ構造を統一化
-          // パターン1: 直接プロパティ
+          // パターン1: 1枚目の形式（直接プロパティ）
           if (message.points && Array.isArray(message.points) && message.points.length > 0) {
             strokeData = {
               points: message.points,
-              color: message.color || '#000000',
-              opacity: message.opacity !== undefined ? message.opacity : 0.7,
-              penSize: message.penSize !== undefined ? message.penSize : 4,
-              tool: extractedTool || 'pen' // デフォルトはペン
+              color: message.color,
+              opacity: message.opacity,
+              penSize: message.penSize,
+              tool: message.tool
             };
-            console.log('📥 直接プロパティから取得:', strokeData);
+            console.log('📥 1枚目形式（直接プロパティ）から取得:', strokeData);
           }
-          // パターン2: dataプロパティ
+          // パターン2: 2枚目の形式（dataプロパティ）
           else if (message.data && message.data.points && Array.isArray(message.data.points) && message.data.points.length > 0) {
-            strokeData = {
-              points: message.data.points,
-              color: message.data.color || '#000000',
-              opacity: message.data.opacity !== undefined ? message.data.opacity : 0.7,
-              penSize: message.data.penSize !== undefined ? message.data.penSize : 4,
-              tool: extractedTool || 'pen'
-            };
-            console.log('📥 data内から取得:', strokeData);
+            strokeData = message.data;
+            console.log('📥 2枚目形式（data内）から取得:', strokeData);
           }
           // パターン3: strokeプロパティ
           else if (message.stroke && message.stroke.points && Array.isArray(message.stroke.points) && message.stroke.points.length > 0) {
-            strokeData = {
-              points: message.stroke.points,
-              color: message.stroke.color || '#000000',
-              opacity: message.stroke.opacity !== undefined ? message.stroke.opacity : 0.7,
-              penSize: message.stroke.penSize !== undefined ? message.stroke.penSize : 4,
-              tool: extractedTool || 'pen'
-            };
+            strokeData = message.stroke;
             console.log('📥 strokeプロパティから取得:', strokeData);
           }
           // パターン4: AWS API Gateway形式（Lambdaレスポンス）
@@ -1666,13 +1439,7 @@
             try {
               const bodyData = typeof message.body === 'string' ? JSON.parse(message.body) : message.body;
               if (bodyData.points && Array.isArray(bodyData.points) && bodyData.points.length > 0) {
-                strokeData = {
-                  points: bodyData.points,
-                  color: bodyData.color || '#000000',
-                  opacity: bodyData.opacity !== undefined ? bodyData.opacity : 0.7,
-                  penSize: bodyData.penSize !== undefined ? bodyData.penSize : 4,
-                  tool: bodyData.tool || extractedTool || 'pen'
-                };
+                strokeData = bodyData;
                 console.log('📥 AWS API Gateway形式（body内）から取得:', strokeData);
               }
             } catch (e) {
@@ -1680,22 +1447,55 @@
             }
           }
           
+          // デバッグ用：すべてのプロパティをチェック
+          console.log('🔍 メッセージプロパティチェック:');
+          console.log('  - message.points:', message.points);
+          console.log('  - message.data:', message.data);
+          console.log('  - message.stroke:', message.stroke);
+          console.log('  - message.body:', message.body);
+          console.log('  - message keys:', Object.keys(message));
+          
           if (!strokeData) {
             console.error('❌ strokeDataが見つからない - 全プロパティ:', message);
+            console.error('❌ データ構造が予期しない形式です');
             break;
           }
           
           // データ検証を強化
-          if (!strokeData.points || !Array.isArray(strokeData.points) || strokeData.points.length === 0) {
-            console.error('❌ 無効なstrokeData:', strokeData);
+          if (!strokeData) {
+            console.error('❌ strokeDataがnullまたはundefined');
+            break;
+          }
+          
+          if (!strokeData.points) {
+            console.error('❌ strokeData.pointsが存在しない:', strokeData);
+            break;
+          }
+          
+          if (!Array.isArray(strokeData.points)) {
+            console.error('❌ strokeData.pointsが配列ではない:', typeof strokeData.points, strokeData.points);
+            break;
+          }
+          
+          if (strokeData.points.length === 0) {
+            console.warn('⚠️ strokeData.pointsが空配列');
             break;
           }
           
           // 各ポイントの構造を検証
           const validPoints = strokeData.points.filter(point => {
-            if (!point || typeof point !== 'object') return false;
-            if (typeof point.x !== 'number' || typeof point.y !== 'number') return false;
-            if (isNaN(point.x) || isNaN(point.y)) return false;
+            if (!point || typeof point !== 'object') {
+              console.warn('⚠️ 無効なpoint:', point);
+              return false;
+            }
+            if (typeof point.x !== 'number' || typeof point.y !== 'number') {
+              console.warn('⚠️ point.x または point.y が数値ではない:', point);
+              return false;
+            }
+            if (isNaN(point.x) || isNaN(point.y)) {
+              console.warn('⚠️ point.x または point.y がNaN:', point);
+              return false;
+            }
             return true;
           });
           
@@ -1710,54 +1510,41 @@
             strokeData.points = validPoints;
           }
           
-          // 最終的な描画パラメータを設定（受信データのツール情報を使用）
-          const penSize = strokeData.penSize;
-          const color = strokeData.color;
-          const opacity = strokeData.opacity;
-          const tool = strokeData.tool; // 受信データのツール情報を使用
-          
-          console.log('🔍 最終受信データ詳細（受信ツール使用）:');
+          console.log('🔍 受信データ詳細:');
           console.log('  - points数:', strokeData.points.length);
+          console.log('  - 最初のpoint:', strokeData.points[0]);
+          console.log('  - 最後のpoint:', strokeData.points[strokeData.points.length - 1]);
+          console.log('  - penSize:', strokeData.penSize);
+          console.log('  - color:', strokeData.color);
+          console.log('  - opacity:', strokeData.opacity);
+          console.log('  - tool:', strokeData.tool);
+          
+          // デフォルト値の設定
+          const penSize = strokeData.penSize !== undefined ? strokeData.penSize : 
+                         this.currentPenSize !== undefined ? this.currentPenSize : 4;
+          const color = strokeData.color || this.canvasManager.currentColor || '#000000';
+          const opacity = strokeData.opacity !== undefined ? strokeData.opacity : 
+                         this.canvasManager.currentOpacity !== undefined ? this.canvasManager.currentOpacity : 1.0;
+          const tool = strokeData.tool || this.currentTool || 'pen';
+          
+          console.log('🎨 描画に使用する最終値:');
           console.log('  - penSize:', penSize);
           console.log('  - color:', color);
           console.log('  - opacity:', opacity);
           console.log('  - tool:', tool);
-          console.log('  - tool === "eraser":', tool === 'eraser');
-          console.log('  - typeof tool:', typeof tool);
           
-          // 受信データのツールに応じた描画実行（自分のツール状態は無視）
+          // 描画実行
           try {
-            console.log('🔍 描画前ツール判定:');
-            console.log('  - tool:', tool);
-            console.log('  - tool type:', typeof tool);
-            console.log('  - tool === "eraser":', tool === 'eraser');
-            console.log('  - tool.toString():', tool.toString());
-            console.log('  - tool.toString().toLowerCase():', tool.toString().toLowerCase());
-            
-            // 🔧 ツール判定を厳密に
-            const isEraser = tool && (
-              tool === 'eraser' || 
-              tool.toString().toLowerCase() === 'eraser' || 
-              tool === '消しゴム'
-            );
-            
-            console.log('🔍 isEraser:', isEraser);
-            
-            if (isEraser) {
-              console.log('🗑️ 消しゴム描画実行開始');
-              
-              // 消しゴム処理：全ポイントを消去
+            if (tool === 'eraser') {
+              console.log('🗑️ 消しゴム描画開始');
               for (let i = 0; i < strokeData.points.length; i++) {
-                const point = strokeData.points[i];
-                console.log(`🗑️ 消しゴム適用 ${i+1}/${strokeData.points.length}:`, point, 'size:', penSize);
-                this.canvasManager.eraseWithSettings(point, penSize);
+                this.canvasManager.eraseAtPoint(strokeData.points[i], penSize);
               }
               console.log('✅ 消しゴム描画完了');
-              
             } else {
-              console.log('✏️ ペン描画実行開始');
+              console.log('✏️ ペン描画開始');
               
-              // ペン描画処理
+              // 単一ポイントの場合は点として描画
               if (strokeData.points.length === 1) {
                 const point = strokeData.points[0];
                 this.canvasManager.ctx.save();
@@ -1785,7 +1572,6 @@
           } catch (drawError) {
             console.error('❌ 描画エラー:', drawError);
             console.error('エラー時のstrokeData:', strokeData);
-            console.error('エラー時のtool:', tool);
           }
           
           break;
@@ -1794,11 +1580,8 @@
           console.log('⚙️ 設定更新受信:', message.settings);
           if (message.settings) {
             if (message.settings.penSize !== undefined) {
-              // 消しゴムの場合は12px固定なので、ペンの場合のみサイズ更新
-              if (message.settings.tool !== 'eraser') {
-                this.currentPenSize = message.settings.penSize;
-                this.canvasManager.setPenSize(message.settings.penSize);
-              }
+              this.currentPenSize = message.settings.penSize;
+              this.canvasManager.setPenSize(message.settings.penSize);
             }
             
             if (message.settings.color !== undefined) {
@@ -1812,15 +1595,6 @@
             if (message.settings.tool !== undefined) {
               this.currentTool = message.settings.tool;
               this.canvasManager.setTool(message.settings.tool);
-              
-              // 消しゴムに変更された場合はサイズを12pxに固定
-              if (message.settings.tool === 'eraser') {
-                this.currentPenSize = 12;
-                this.canvasManager.setPenSize(12);
-                console.log('🗑️ 設定更新で消しゴムに変更：サイズを12pxに固定');
-              }
-              
-              console.log('🔧 ツール設定更新（受信）:', message.settings.tool);
             }
             
             this.updateBarState();

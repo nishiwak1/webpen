@@ -41,7 +41,7 @@ class CanvasManager {
     this.canvas.style.cssText = canvasStyles;
 
     this.resize(isBarVisible);
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
     this.setupContext();
     document.body.appendChild(this.canvas);
 
