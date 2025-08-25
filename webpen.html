@@ -330,6 +330,55 @@
       font-weight: bold;
     }
 
+    /* ツールグリッド */
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);  /* 2列 → 6列 */
+      gap: 6px;  /* colorグリッドと同じ */
+      margin-bottom: 16px;
+    }
+
+    .tool-option {
+      width: 36px;   /* colorスウォッチと同じサイズ */
+      height: 36px;
+      padding: 0;    /* パディングをリセット */
+      background: #404040;
+      border-radius: 6px;  /* colorスウォッチと同じ */
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+      font-size: 18px;  /* 絵文字サイズ調整 */
+      font-weight: normal;  /* 太字解除 */
+      border: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;  /* widthと同じに */
+      position: relative;
+    }
+
+    .tool-option:hover {
+      background: #505050;
+      transform: scale(1.1);  /* colorスウォッチと同じホバー効果 */
+    }
+
+    .tool-option.selected {
+      background: #5c5c5c;
+      border-color: #ffffff;
+      transform: scale(1.05);  /* colorスウォッチと同じ選択効果 */
+    }
+
+    .tool-option.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: bold;
+      text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+    }
+
     /* カラーグリッド */
     .color-grid {
       display: grid;
@@ -551,15 +600,33 @@
   <div class="color-palette" id="colorPalette">
     <div class="palette-header">
       <div class="palette-title">PALETTE</div>
-      <button class="palette-close-btn" id="paletteCloseBtn">×</button>
+      <button class="palette-close-btn" id="paletteCloseBtn">
+          <img src="" data-icon="close" alt="閉じる">
+      </button>
     </div>
 
-    <!-- ★ ツールセクション（新機能） -->
+    <!-- ツールセクション -->
     <div class="palette-section">
       <div class="section-label">TOOL</div>
       <div class="tool-grid">
-        <div class="tool-option" data-tool-type="pen">🖊️ ペン</div>
-        <div class="tool-option" data-tool-type="cursor">👆 カーソル</div>
+        <div class="tool-option" data-tool-type="cursor" title="カーソルモード">
+          <img src="" class="tool-icon" data-icon="cursor" alt="ペン">
+        </div>
+        <div class="tool-option" data-tool-type="pen" title="ペン">
+          <img src="" class="tool-icon" data-icon="pen" alt="ペン">
+        </div>
+        <div class="tool-option" data-tool-type="eraser-line" title="消しゴム">
+          <img src="" class="tool-icon" data-icon="eraser-line" alt="消しゴム">
+        </div>
+        <div class="tool-option" data-tool-type="eraser" title="線ごと消しゴム">
+          <img src="" class="tool-icon" data-icon="eraser" alt="線ごと消しゴム">
+        </div>
+        <div class="tool-option" data-tool-type="brush" title="ブラシ">
+          🖌️
+        </div>
+        <div class="tool-option" data-tool-type="spray" title="スプレー">
+          💨
+        </div>
       </div>
     </div>
 

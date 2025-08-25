@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "共有お絵描き",
+  "name": "WebPen",
   "version": "1.0",
-  "description": "8桁コードで他のユーザーとリアルタイムお絵描き共有",
+  "description": "他のユーザーとリアルタイムでラクガキを",
   "icons": {
-    "16": "images/icon16.png",
-    "48": "images/icon48.png",
-    "128": "images/icon128.png"
+    "16": "images/webpen-16.png",
+    "32": "images/webpen-32.png",
+    "48": "images/webpen-48.png",
+    "128": "images/webpen-128.png"
   },
   "permissions": [
     "activeTab",
@@ -37,7 +38,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "control-bar.html",
+        "webpen.html",
         "images/*"
       ],
       "matches": [

@@ -6,7 +6,7 @@ class CanvasManager {
     this.isDrawing = false;
     this.isEnabled = true;
     this.currentColor = '#000000';
-    this.currentOpacity = 0.7;
+    this.currentOpacity = 1;
     this.lastPos = { x: 0, y: 0 }; // キャンバス座標
     this.onDraw = onDrawCallback;
 
@@ -38,14 +38,14 @@ class CanvasManager {
 
   create(isBarVisible = true) {
     // 既存のキャンバスを削除
-    const existingCanvas = document.getElementById('shared-drawing-canvas');
+    const existingCanvas = document.getElementById('webpen-canvas');
     if (existingCanvas) {
       existingCanvas.remove();
     }
 
     // 新しいキャンバスを作成
     this.canvas = document.createElement('canvas');
-    this.canvas.id = 'shared-drawing-canvas';
+    this.canvas.id = 'webpen-canvas';
 
     // ページ全体の高さを取得
     const pageHeight = Math.max(
@@ -458,12 +458,12 @@ class CanvasManager {
       overflow: auto !important;
     }
     
-    #shared-drawing-control-bar,
-    #shared-drawing-control-bar * {
+    #webpen-control-bar,
+    #webpen-control-bar * {
       pointer-events: auto !important;
     }
     
-    #shared-drawing-canvas {
+    #webpen-canvas {
       pointer-events: auto !important;
     }
   `;

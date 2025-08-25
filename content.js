@@ -2,7 +2,7 @@ class SharedDrawing {
   constructor() {
     // 状態管理（タブ固有）
     this.controlBar = null;
-    this.isBarVisible = false;
+    this.isBarVisible = true;
     this.currentRoom = null; // タブ固有
     this.userCount = 0;
     this.isInitialized = false;
@@ -11,9 +11,9 @@ class SharedDrawing {
     // 描画設定（タブ固有）
     this.isDrawingEnabled = true;
     this.currentColor = '#000000';
-    this.currentOpacity = 0.7;
+    this.currentOpacity = 1;
 
-    // アクティブなツールIDを直接管理
+    // ★ アクティブなツールIDを直接管理
     this.activeToolId = 'cursor'; // 初期値はカーソル
 
     // ひとつ戻る・進む用の履歴管理
@@ -55,10 +55,18 @@ class SharedDrawing {
     if (this.isInitialized) return;
 
     try {
-      this.isBarVisible = false;
-      this.isDrawingEnabled = false;
+      // グローバル設定を読み込み（UI表示状態 + 描画モード）
+      const result = await chrome.storage.local.get(['isBarVisible', 'isDrawingEnabled']);
 
-      // 初期アクティブツールを0番スロットに設定
+      this.isBarVisible = result.isBarVisible !== false;
+      this.isDrawingEnabled = result.isDrawingEnabled !== false;
+
+      // UIが非表示なら描画をOFF
+      if (!this.isBarVisible) {
+        this.isDrawingEnabled = false;
+      }
+
+      // ★ 初期アクティブツールを0番スロットに設定
       this.activeToolId = '0';
 
       // 描画設定はタブ固有のデフォルト値を使用
@@ -66,9 +74,9 @@ class SharedDrawing {
       this.canvasManager.setColor(this.currentColor);
       this.canvasManager.setOpacity(this.currentOpacity);
 
-      // UI作成（非表示状態）
+      // UI作成
       setTimeout(() => {
-
+        this.createControlBar();
         this.canvasManager.create(this.isBarVisible);
         this.setupChromeListeners();
         this.isInitialized = true;
@@ -78,20 +86,13 @@ class SharedDrawing {
       console.error('初期化エラー:', error);
     }
   }
-  getCurrentState() {
-    return {
-      isBarVisible: this.isBarVisible,
-      isDrawingEnabled: this.isDrawingEnabled
-    };
-  }
-
 
   // ----------------------------------------
   // 1. UI作成・管理
   // ----------------------------------------
 
   createControlBar() {
-    const existingBar = document.getElementById('shared-drawing-control-bar');
+    const existingBar = document.getElementById('webpen-control-bar');
     if (existingBar) {
       existingBar.remove();
     }
@@ -107,7 +108,7 @@ class SharedDrawing {
     }
 
     this.controlBar = document.createElement('div');
-    this.controlBar.id = 'shared-drawing-control-bar';
+    this.controlBar.id = 'webpen-control-bar';
 
     const barStyles = `
       position: fixed !important;
@@ -138,7 +139,7 @@ class SharedDrawing {
 
   async loadBarContent() {
     try {
-      const htmlUrl = chrome.runtime.getURL('control-bar.html');
+      const htmlUrl = chrome.runtime.getURL('webpen.html');
       const response = await fetch(htmlUrl);
 
       if (!response.ok) {
@@ -151,7 +152,10 @@ class SharedDrawing {
       const iconMappings = {
         'arrow-back': 'images/arrow-back.svg',
         'arrow-forward': 'images/arrow-forward.svg',
-        'pointer': 'images/pointer.svg',
+        'cursor': 'images/cursor.svg',
+        'pen': 'images/pen.svg',
+        'eraser': 'images/eraser.svg',
+        'eraser-line': 'images/eraser-line.svg',
         'trash': 'images/trash.svg',
         'settings': 'images/settings.svg',
         'close': 'images/close.svg',
@@ -306,6 +310,12 @@ class SharedDrawing {
 
   async toggleBarVisibility(visible) {
     this.isBarVisible = visible;
+
+    try {
+      await chrome.storage.local.set({ isBarVisible: visible });
+    } catch (error) {
+      console.error('ストレージ保存エラー:', error);
+    }
 
     if (visible) {
       this.createControlBar();
@@ -1110,16 +1120,11 @@ class SharedDrawing {
             case 'PING':
               sendResponse({ status: 'ok' });
               break;
-            case 'GET_CURRENT_STATE':
-              // ★ 新しいメッセージタイプ：現在の状態を返す
-              sendResponse(this.getCurrentState());
-              break;
             case 'TOGGLE_BAR_VISIBILITY':
               this.toggleBarVisibility(message.visible);
               break;
             case 'SYNC_UI_STATE':
-              // ★ UI状態同期を削除（各タブ独立）
-              // this.syncUIState(message.isBarVisible);
+              this.syncUIState(message.isBarVisible);
               break;
             case 'TOGGLE_DRAWING':
               this.toggleDrawing(message.isDrawing);
