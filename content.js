@@ -1417,8 +1417,8 @@
         
         console.log(`✅ 有効ポイント: ${validPoints.length}/${stroke.points.length}`);
         
-        // ツール情報を確実に設定（優先順位付き）
-        const toolToSend = stroke.tool || this.canvasManager.currentTool || this.currentTool || 'pen';
+        // ツール情報を確実に設定（stroke.toolを最優先に、他は確認用）                                 │ │
+        const toolToSend = stroke.tool; // stroke.toolを直接使用（フォールバックなし）  
         
         console.log('🎯 ツール情報確認:');
         console.log('  - stroke.tool:', stroke.tool);
@@ -1435,8 +1435,7 @@
           color: stroke.color || this.canvasManager.currentColor || '#000000',
           opacity: stroke.opacity !== undefined ? stroke.opacity : 
                   this.canvasManager.currentOpacity !== undefined ? this.canvasManager.currentOpacity : 0.7,
-          penSize: stroke.penSize !== undefined ? stroke.penSize : 
-                  this.currentPenSize !== undefined ? this.currentPenSize : 4,
+          penSize: stroke.penSize || this.currentPenSize || this.canvasManager.currentPenSize || 12,
           tool: toolToSend, // ここを確実に設定
           startTime: stroke.startTime || Date.now(),
           timestamp: Date.now()
@@ -1634,8 +1633,8 @@
               points: message.points,
               color: message.color || '#000000',
               opacity: message.opacity !== undefined ? message.opacity : 0.7,
-              penSize: message.penSize !== undefined ? message.penSize : 4,
-              tool: extractedTool || 'pen' // デフォルトはペン
+              penSize: message.penSize || 12,
+              tool: extractedTool || 'pen' 
             };
             console.log('📥 直接プロパティから取得:', strokeData);
           }
@@ -1645,7 +1644,7 @@
               points: message.data.points,
               color: message.data.color || '#000000',
               opacity: message.data.opacity !== undefined ? message.data.opacity : 0.7,
-              penSize: message.data.penSize !== undefined ? message.data.penSize : 4,
+              penSize: message.data.penSize || 12,
               tool: extractedTool || 'pen'
             };
             console.log('📥 data内から取得:', strokeData);
@@ -1656,7 +1655,7 @@
               points: message.stroke.points,
               color: message.stroke.color || '#000000',
               opacity: message.stroke.opacity !== undefined ? message.stroke.opacity : 0.7,
-              penSize: message.stroke.penSize !== undefined ? message.stroke.penSize : 4,
+              penSize: message.stroke.penSize || 12,
               tool: extractedTool || 'pen'
             };
             console.log('📥 strokeプロパティから取得:', strokeData);
@@ -1670,7 +1669,7 @@
                   points: bodyData.points,
                   color: bodyData.color || '#000000',
                   opacity: bodyData.opacity !== undefined ? bodyData.opacity : 0.7,
-                  penSize: bodyData.penSize !== undefined ? bodyData.penSize : 4,
+                  penSize: bodyData.penSize || 12,
                   tool: bodyData.tool || extractedTool || 'pen'
                 };
                 console.log('📥 AWS API Gateway形式（body内）から取得:', strokeData);
