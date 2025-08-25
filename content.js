@@ -13,6 +13,9 @@ class SharedDrawing {
     this.currentColor = '#000000';
     this.currentOpacity = 0.7;
 
+    // ★ アクティブなツールIDを直接管理
+    this.activeToolId = 'cursor'; // 初期値はカーソル
+
     // ひとつ戻る・進む用の履歴管理
     this.history = []; // 全ての操作履歴（描画、クリアなど）
     this.historyIndex = -1; // 現在の履歴位置
@@ -63,6 +66,9 @@ class SharedDrawing {
         this.isDrawingEnabled = false;
       }
 
+      // ★ 初期アクティブツールを0番スロットに設定
+      this.activeToolId = '0';
+
       // 描画設定はタブ固有のデフォルト値を使用
       this.canvasManager.setEnabled(this.isDrawingEnabled);
       this.canvasManager.setColor(this.currentColor);
@@ -110,7 +116,7 @@ class SharedDrawing {
       left: 0 !important;
       right: 0 !important;
       width: 100% !important;
-      height: 60px !important;
+      height: 32px !important;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
       border-bottom: 1px solid rgba(255,255,255,0.2) !important;
       z-index: 2147483647 !important;
@@ -142,20 +148,36 @@ class SharedDrawing {
 
       const htmlContent = await response.text();
       this.controlBar.innerHTML = htmlContent;
+
+      const iconMappings = {
+        'arrow-back': 'images/arrow-back.svg',
+        'arrow-forward': 'images/arrow-forward.svg',
+        'pointer': 'images/pointer.svg',
+        'trash': 'images/trash.svg',
+        'settings': 'images/settings.svg',
+        'close': 'images/close.svg',
+      };
+
+      // data-icon属性を持つ全ての画像要素を取得
+      this.controlBar.querySelectorAll('[data-icon]').forEach(img => {
+        const iconName = img.dataset.icon;
+        if (iconMappings[iconName]) {
+          img.src = chrome.runtime.getURL(iconMappings[iconName]);
+        }
+      });
+
+      // ★ スロットツールタイプをロード（カーソル/ペンの配置を復元）
+      await this.loadSlotToolTypes();
+
+      // ★ ツール色をロード（保存された色を復元）
+      await this.loadToolColors();
+
       this.updateBarState();
       this.setupControlBarEvents();
-
-      // コンテンツ読み込み完了後、状態に応じて表示
       this.showBarIfNeeded();
 
     } catch (error) {
       console.error('HTMLコンテンツ読み込みエラー:', error);
-      this.controlBar.innerHTML = `
-        <div style="color: white; padding: 15px; text-align: center; font-family: Arial;">
-          ⚠️ control-bar.html が見つかりません
-        </div>
-      `;
-      this.showBarIfNeeded();
     }
   }
 
@@ -189,13 +211,7 @@ class SharedDrawing {
 
     const expandedContent = this.controlBar.querySelector('#expanded-content');
     const minimizedContent = this.controlBar.querySelector('#minimized-content');
-    const roomJoin = this.controlBar.querySelector('#room-join');
-    const roomCurrent = this.controlBar.querySelector('#room-current');
     const currentRoomCode = this.controlBar.querySelector('#current-room-code');
-    const toggleDrawButton = this.controlBar.querySelector('#toggle-draw-btn');
-    const opacitySlider = this.controlBar.querySelector('#opacity-slider');
-    const opacityValue = this.controlBar.querySelector('#opacity-value');
-    const roomInput = this.controlBar.querySelector('#room-input');
 
     // 展開/最小化の表示切り替え
     if (expandedContent && minimizedContent) {
@@ -207,6 +223,29 @@ class SharedDrawing {
         minimizedContent.classList.add('hidden');
       }
     }
+
+    // ★ ツールボタンの状態更新（修正版：ツールIDベースで判定）
+    const toolBtns = this.controlBar.querySelectorAll('.slot-tool');
+    toolBtns.forEach(btn => {
+      const toolId = btn.dataset.tool;
+      const toolType = this.getSlotToolType(toolId);
+      let isActive = false;
+
+      if (toolType === 'cursor') {
+        // カーソルツールは描画が無効の時にアクティブ
+        isActive = !this.isDrawingEnabled && this.activeToolId === toolId;
+      } else {
+        // ペンツールは描画が有効で、かつそのツールがアクティブな時にアクティブ
+        isActive = this.isDrawingEnabled && this.activeToolId === toolId;
+      }
+
+      btn.classList.toggle('active', isActive);
+    });
+
+    // 部屋関連
+    const roomJoin = this.controlBar.querySelector('#room-join');
+    const roomCurrent = this.controlBar.querySelector('#room-current');
+    const roomInput = this.controlBar.querySelector('#room-input');
 
     // 部屋入力フィールドを常にクリア（タブ固有の動作）
     if (roomInput) {
@@ -230,46 +269,33 @@ class SharedDrawing {
       }
     }
 
-    // 描画ボタンの状態更新
-    if (toggleDrawButton) {
-      const displayText = !this.isBarVisible ? '描画: OFF (最小化中)' : `描画: ${this.isDrawingEnabled ? 'ON' : 'OFF'}`;
+    const joinBtn = this.controlBar.querySelector('#join-btn');
+    const leaveBtn = this.controlBar.querySelector('#leave-btn');
 
-      toggleDrawButton.textContent = displayText;
-      toggleDrawButton.className = `btn ${this.isDrawingEnabled ? 'btn-toggle-on' : 'btn-toggle-off'}`;
-
-      toggleDrawButton.disabled = !this.isBarVisible;
-      if (!this.isBarVisible) {
-        toggleDrawButton.style.opacity = '0.5';
-        toggleDrawButton.style.cursor = 'not-allowed';
+    if (joinBtn && leaveBtn) {
+      if (this.currentRoom) {
+        // 参加後：LEAVEボタン表示、JOINボタン非表示
+        joinBtn.classList.add('hidden');
+        leaveBtn.classList.remove('hidden');
       } else {
-        toggleDrawButton.style.opacity = '';
-        toggleDrawButton.style.cursor = 'pointer';
+        // 参加前：JOINボタン表示、LEAVEボタン非表示
+        joinBtn.classList.remove('hidden');
+        leaveBtn.classList.add('hidden');
       }
     }
 
-    // 透明度スライダーの状態更新
-    if (opacitySlider) {
-      opacitySlider.value = this.currentOpacity;
-    }
-    if (opacityValue) {
-      opacityValue.textContent = Math.round(this.currentOpacity * 100) + '%';
-    }
-
-    // 色ボタンの状態更新
-    const colorBtns = this.controlBar.querySelectorAll('.color-btn');
-    colorBtns.forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.color === this.currentColor);
-    });
-
     // Undo/Redoボタンの状態を更新
     this.updateUndoRedoButtons();
+
+    // ★ 下線表示も更新
+    this.updateActiveToolUnderline();
   }
 
   updateBodyPadding() {
     if (!document.body) return;
 
     if (this.isBarVisible) {
-      document.body.style.paddingTop = '60px';
+      document.body.style.paddingTop = '32px';
     } else {
       document.body.style.paddingTop = '';
     }
@@ -351,44 +377,68 @@ class SharedDrawing {
   // ----------------------------------------
   // 3. イベント設定
   // ----------------------------------------
-
   setupControlBarEvents() {
     const self = this;
 
-    // 展開/最小化ボタン
-    const expandBtn = self.controlBar.querySelector('#expand-btn');
-    const minimizeBtn = self.controlBar.querySelector('#minimize-btn');
-
-    if (expandBtn) {
-      expandBtn.addEventListener('click', (e) => {
+    // ツールボタン（新しいツールパレットシステム）
+    const toolBtns = self.controlBar.querySelectorAll('.slot-tool');
+    toolBtns.forEach(btn => {
+      // 左クリック処理（修正版）
+      btn.addEventListener('click', async (e) => { // ★ asyncを追加
         e.preventDefault();
         e.stopPropagation();
-        self.toggleBarVisibility(true);
+
+        const toolId = btn.dataset.tool;
+
+        // ★ 保存されているツールタイプを確認
+        const currentToolType = this.getSlotToolType(toolId);
+        console.log(`左クリック - ツール${toolId} - タイプ: ${currentToolType}`);
+
+        if (currentToolType === 'cursor') {
+          // カーソルツール：描画を無効にする
+          self.setActiveTool(toolId);
+          // setActiveToolで既に描画モード設定済み
+        } else {
+          // ペンツール：上書きされた色または初期色を使用
+          const toolColor = await self.getToolColor(toolId);
+
+          // アクティブツールを設定
+          self.setActiveTool(toolId);
+          // setActiveToolで既に描画モード設定済みだが、念のため色を再適用
+          self.changeColor(toolColor);
+        }
       });
-    }
 
-    if (minimizeBtn) {
-      minimizeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        self.toggleBarVisibility(false);
-      });
-    }
-
-    // 描画切り替えボタン
-    const toggleDrawButton = self.controlBar.querySelector('#toggle-draw-btn');
-    if (toggleDrawButton) {
-      toggleDrawButton.addEventListener('click', (e) => {
+      // 右クリック処理（既存のまま）
+      btn.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!self.isBarVisible) {
-          return;
+        // ★ 右クリック時に即座にそのスロットをアクティブ化
+        const toolId = btn.dataset.tool;
+        const toolType = this.getSlotToolType(toolId);
+
+        // スロットをアクティブに設定
+        this.setActiveTool(toolId);
+
+        // ツールタイプに応じて描画モードを調整
+        if (toolType === 'cursor') {
+          this.toggleDrawing(false);
+        } else {
+          this.toggleDrawing(true);
+          // ペンツールの場合は現在の色を適用
+          this.getToolColor(toolId).then(color => {
+            this.changeColor(color);
+          });
         }
 
-        self.toggleDrawing(!self.isDrawingEnabled);
+        // パレットを表示
+        this.showColorPalette(e, btn);
       });
-    }
+    });
+
+    // カラーパレット関連イベント
+    this.setupColorPaletteEvents();
 
     // 部屋関連ボタン
     const roomInput = self.controlBar.querySelector('#room-input');
@@ -436,6 +486,41 @@ class SharedDrawing {
       });
     }
 
+    // 展開/最小化ボタン
+    const expandBtn = self.controlBar.querySelector('#expand-btn');
+    const minimizeBtn = self.controlBar.querySelector('#minimize-btn');
+
+    if (expandBtn) {
+      expandBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        self.toggleBarVisibility(true);
+      });
+    }
+
+    if (minimizeBtn) {
+      minimizeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        self.toggleBarVisibility(false);
+      });
+    }
+
+    // 描画切り替えボタン
+    const toggleDrawButton = self.controlBar.querySelector('#toggle-draw-btn');
+    if (toggleDrawButton) {
+      toggleDrawButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!self.isBarVisible) {
+          return;
+        }
+
+        self.toggleDrawing(!self.isDrawingEnabled);
+      });
+    }
+
     // 色選択ボタン
     const colorBtns = self.controlBar.querySelectorAll('.color-btn');
     colorBtns.forEach(btn => {
@@ -476,6 +561,17 @@ class SharedDrawing {
       });
     }
 
+    // 閉じるボタン
+    const closeBtn = self.controlBar.querySelector('#close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // バーを非表示にして、線も非表示に
+        self.toggleBarVisibility(false);
+      });
+    }
+
     // キーボードショートカット
     document.addEventListener('keydown', (e) => {
       // Ctrl+Z または Cmd+Z でUndo
@@ -494,6 +590,523 @@ class SharedDrawing {
         self.handleRedo();
       }
     });
+  }
+
+  // カラーパレット関連のイベント設定
+  setupColorPaletteEvents() {
+    const palette = this.controlBar.querySelector('#colorPalette');
+    if (!palette) return;
+
+    const closeBtn = palette.querySelector('#paletteCloseBtn');
+    const colorSwatches = palette.querySelectorAll('.color-swatch');
+    const opacitySlider = palette.querySelector('#opacitySlider');
+    const opacityValue = palette.querySelector('#opacityValue');
+    const penSizeSlider = palette.querySelector('#penSizeSlider');
+    const penSizeValue = palette.querySelector('#penSizeValue');
+
+    // 閉じるボタン
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.hideColorPalette();
+      });
+    }
+
+    // カラースウォッチ選択（色変更実装 + ツール上書き）
+    colorSwatches.forEach(swatch => {
+      swatch.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const selectedColor = swatch.dataset.color;
+        console.log('Color selected:', selectedColor);
+
+        // ★ ペンツールの場合のみ色変更を適用
+        if (this.currentEditingTool && this.getSlotToolType(this.currentEditingTool.dataset.tool) === 'pen') {
+          // 既存の選択を解除
+          colorSwatches.forEach(el => el.classList.remove('selected'));
+
+          // 新しい選択を追加
+          swatch.classList.add('selected');
+
+          const toolId = this.currentEditingTool.dataset.tool;
+          this.updateToolColor(this.currentEditingTool, selectedColor);
+
+          // ★ そのツールをアクティブに設定
+          this.setActiveTool(toolId);
+
+          // 実際に色を変更
+          this.changeColor(selectedColor);
+
+          // 描画モードを有効にする（色を選択したら描画可能に）
+          if (!this.isDrawingEnabled) {
+            this.toggleDrawing(true);
+          }
+
+          // パレットを閉じる（色選択後）
+          setTimeout(() => {
+            this.hideColorPalette();
+          }, 150);
+        }
+      });
+    });
+
+    // ★ ツールオプション選択（新機能）
+    const toolOptions = palette.querySelectorAll('.tool-option');
+    toolOptions.forEach(option => {
+      option.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const toolType = option.dataset.toolType;
+        console.log('Tool selected:', toolType);
+
+        if (this.currentEditingTool) {
+          const toolId = this.currentEditingTool.dataset.tool;
+
+          // 既存の選択を解除
+          toolOptions.forEach(el => el.classList.remove('selected'));
+
+          // 新しい選択を追加
+          option.classList.add('selected');
+
+          // スロットのツールタイプを変更
+          await this.setSlotToolType(toolId, toolType);
+
+          // そのツールをアクティブに設定
+          this.setActiveTool(toolId);
+
+          // カーソルツールの場合は描画を無効に、ペンツールの場合は有効に
+          if (toolType === 'cursor') {
+            this.toggleDrawing(false);
+          } else {
+            this.toggleDrawing(true);
+            // ペンツールの場合は現在の色を取得して適用
+            const toolColor = await this.getToolColor(toolId);
+            this.changeColor(toolColor);
+          }
+
+          // パレットを閉じる（ツール選択後）
+          setTimeout(() => {
+            this.hideColorPalette();
+          }, 150);
+        }
+      });
+    });
+
+    // スライダー値の更新（表示のみ - 機能は実装しない）
+    if (opacitySlider && opacityValue) {
+      opacitySlider.addEventListener('input', () => {
+        opacityValue.textContent = opacitySlider.value + '%';
+        console.log('Opacity changed:', opacitySlider.value);
+        // 透明度変更は実装しない
+      });
+    }
+
+    if (penSizeSlider && penSizeValue) {
+      penSizeSlider.addEventListener('input', () => {
+        penSizeValue.textContent = penSizeSlider.value + 'px';
+        console.log('Pen size changed:', penSizeSlider.value);
+        // ペンサイズ変更は実装しない
+      });
+    }
+
+    // パレット外クリックで閉じる
+    document.addEventListener('click', (e) => {
+      if (palette.style.display === 'block' && !palette.contains(e.target)) {
+        this.hideColorPalette();
+      }
+    });
+
+    // ESCキーで閉じる
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && palette.style.display === 'block') {
+        this.hideColorPalette();
+      }
+    });
+  }
+
+  // ★ アクティブツールを設定
+  setActiveTool(toolId) {
+    console.log(`=== setActiveTool 呼び出し ===`);
+    console.log(`設定対象ツール: ${toolId}`);
+    console.log(`呼び出し元:`, new Error().stack.split('\n')[2]);
+
+    this.activeToolId = toolId;
+
+    // ★ ツールタイプを取得して描画モードを適切に設定
+    const toolType = this.getSlotToolType(toolId);
+    console.log(`ツールタイプ: ${toolType}`);
+
+    if (toolType === 'cursor') {
+      // カーソルツールの場合は描画を無効に
+      this.toggleDrawing(false);
+      console.log('カーソルツールのため描画モードOFF');
+    } else {
+      // ペンツールの場合は描画を有効にして色を適用
+      this.toggleDrawing(true);
+      this.getToolColor(toolId).then(color => {
+        this.changeColor(color);
+        console.log(`ペンツールのため描画モードON、色: ${color}`);
+      });
+    }
+
+    console.log(`最終的なactiveToolId: ${this.activeToolId}`);
+
+    // バー状態を更新（これによりアクティブ表示が変わる）
+    this.updateBarState();
+
+    // ★ アクティブツールの下線を更新
+    this.updateActiveToolUnderline();
+
+    console.log(`=== setActiveTool 完了 ===`);
+  }
+
+  // ★ アクティブツールの下線を更新
+  async updateActiveToolUnderline() {
+    if (!this.controlBar) return;
+
+    const toolBtns = this.controlBar.querySelectorAll('.slot-tool');
+
+    // 全ての下線をリセット
+    toolBtns.forEach(btn => {
+      btn.style.borderBottom = '';
+      btn.style.boxShadow = '';
+    });
+
+    // アクティブツールに下線を表示
+    if (this.activeToolId && this.activeToolId !== 'cursor' && this.isDrawingEnabled) {
+      const activeBtn = this.controlBar.querySelector(`[data-tool="${this.activeToolId}"]`);
+      if (activeBtn) {
+        // そのツールの現在の色を取得
+        const toolColor = await this.getToolColor(this.activeToolId);
+
+        // 下線とシャドウで色を表示
+        activeBtn.style.borderBottom = `3px solid ${toolColor}`;
+        activeBtn.style.boxShadow = `inset 0 -3px 0 ${toolColor}`;
+
+        console.log(`ツール ${this.activeToolId} に下線表示 (${toolColor})`);
+      }
+    }
+  }
+
+  // カラーパレットを表示
+  showColorPalette(event, toolBtn) {
+    const palette = this.controlBar.querySelector('#colorPalette');
+    if (!palette) return;
+
+    // 現在編集中のツールを記録
+    this.currentEditingTool = toolBtn;
+
+    palette.style.display = 'block';
+
+    // クリック位置に表示（画面端での調整付き）
+    let x = event.clientX;
+    let y = event.clientY;
+
+    // 画面右端チェック
+    if (x + 280 > window.innerWidth) {
+      x = window.innerWidth - 290;
+    }
+
+    // 画面下端チェック
+    if (y + 350 > window.innerHeight) {  // ★ 高さを350pxに調整（TOOLセクション追加分）
+      y = window.innerHeight - 360;
+    }
+
+    palette.style.position = 'fixed';
+    palette.style.top = y + 'px';
+    palette.style.left = x + 'px';
+
+    // ★ 現在の選択状態を更新（色とツール両方）
+    this.updatePaletteSelection();
+
+    console.log('カラーパレット表示:', toolBtn.dataset.tool);
+  }
+
+  // カラーパレットを非表示
+  hideColorPalette() {
+    const palette = this.controlBar.querySelector('#colorPalette');
+    if (palette) {
+      palette.style.display = 'none';
+    }
+    // 編集中のツール情報をクリア
+    this.currentEditingTool = null;
+  }
+
+  // ツールの色を更新（見た目とデータ）
+  updateToolColor(toolElement, newColor) {
+    const toolId = toolElement.dataset.tool;
+
+    // ★ ペンツールの場合のみ色を更新
+    if (this.getSlotToolType(toolId) === 'pen') {
+      // ツール内のカラーインジケーターを更新
+      const indicator = toolElement.querySelector('.tool-indicator');
+      if (indicator) {
+        indicator.style.background = newColor;
+
+        // 白色の場合は枠を追加
+        if (newColor === '#ffffff') {
+          indicator.style.border = '1px solid #666';
+        } else {
+          indicator.style.border = 'none';
+        }
+      }
+
+      // CSS変数を更新（アクティブ時の下線色）
+      toolElement.style.setProperty('--tool-color', newColor);
+
+      // ツール色データを保存（ローカルストレージ）
+      this.saveToolColor(toolId, newColor);
+    }
+
+    // ★ 現在アクティブなツールの場合は下線も更新
+    if (this.activeToolId === toolId) {
+      this.updateActiveToolUnderline();
+    }
+
+    console.log(`ツール ${toolId} の色を ${newColor} に更新`);
+  }
+
+  // ★ スロットのツールタイプを取得
+  getSlotToolType(slotId) {
+    try {
+      const slotElement = this.controlBar?.querySelector(`[data-tool="${slotId}"]`);
+      if (!slotElement) {
+        console.log(`getSlotToolType エラー: 要素が見つからない (${slotId})`);
+        return 'pen';
+      }
+
+      const toolType = slotElement.dataset.toolType || 'pen';
+
+      // ★ デバッグログ追加
+      console.log(`getSlotToolType(${slotId}): ${toolType} [element:`, slotElement, ']');
+      console.log(`data-tool-type属性値:`, slotElement.getAttribute('data-tool-type'));
+
+      return toolType;
+    } catch (error) {
+      console.log(`getSlotToolType エラー (${slotId}):`, error);
+      return 'pen';
+    }
+  }
+
+  // ★ スロットのツールタイプを設定
+  async setSlotToolType(slotId, toolType) {
+    const slotElement = this.controlBar?.querySelector(`[data-tool="${slotId}"]`);
+    if (!slotElement) return;
+
+    // ★ データ属性を更新（重要：HTMLレベルで更新）
+    slotElement.dataset.toolType = toolType;
+
+    if (toolType === 'cursor') {
+      // カーソルツールに変更
+      slotElement.innerHTML = `
+        <img src="${chrome.runtime.getURL('images/cursor.svg')}" class="slot-icon" alt="カーソル">
+        <span class="key-hint">${this.getKeyHint(slotId)}</span>
+      `;
+      slotElement.title = `カーソルモード (${this.getKeyHint(slotId)})`;
+    } else {
+      // ペンツールに変更
+      const savedColor = await this.getToolColor(slotId);
+      slotElement.innerHTML = `
+        <span class="tool-indicator" style="background: ${savedColor}${savedColor === '#ffffff' ? '; border: 1px solid #666' : ''};"></span>
+        <span class="key-hint">${this.getKeyHint(slotId)}</span>
+      `;
+      slotElement.title = `${this.getColorName(savedColor)}ペン (${this.getKeyHint(slotId)})`;
+    }
+
+    // ローカルストレージに保存
+    await this.saveSlotToolType(slotId, toolType);
+
+    // ★ 保存確認ログ
+    console.log(`スロット ${slotId} を ${toolType} に変更 - HTML更新完了`);
+    console.log(`data-tool-type: ${slotElement.dataset.toolType}`);
+  }
+
+  // ★ キーヒントを取得
+  getKeyHint(slotId) {
+    const keyMap = {
+      '0': '1', '1': '2', '2': '3', '3': '4', '4': '5',
+      '5': '6', '6': '7', '7': '8', '8': '9', '9': '`'
+    };
+    return keyMap[slotId] || '';
+  }
+
+  // ★ 色の名前を取得
+  getColorName(color) {
+    const colorNames = {
+      '#000000': '黒', '#ff0000': '赤', '#0000ff': '青',
+      '#ffff00': '黄', '#ffffff': '白', '#00c000': '緑',
+      '#00ffff': 'シアン', '#ff00ff': 'マゼンタ',
+      '#ff8000': 'オレンジ', '#808080': 'グレー'
+    };
+    return colorNames[color] || '色付き';
+  }
+
+  // ★ スロットツールタイプを保存
+  async saveSlotToolType(slotId, toolType) {
+    try {
+      const key = `slot_tool_type_${slotId}`;
+      await chrome.storage.local.set({ [key]: toolType });
+    } catch (error) {
+      console.error('スロットツールタイプ保存エラー:', error);
+    }
+  }
+
+  // ★ スロットツールタイプを読み込み
+  async loadSlotToolTypes() {
+    try {
+      const slotIds = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+      const keys = slotIds.map(id => `slot_tool_type_${id}`);
+      const result = await chrome.storage.local.get(keys);
+
+      // 各スロットの保存されたツールタイプを適用
+      for (const slotId of slotIds) {
+        const key = `slot_tool_type_${slotId}`;
+        let savedToolType = result[key];
+
+        // ★ スロット0の初期設定：保存データがない場合はカーソルに設定
+        if (slotId === '0' && !savedToolType) {
+          savedToolType = 'cursor';
+        } else if (!savedToolType) {
+          savedToolType = 'pen'; // 他のスロットはデフォルトでペン
+        }
+
+        await this.setSlotToolType(slotId, savedToolType);
+      }
+    } catch (error) {
+      console.error('スロットツールタイプ読み込みエラー:', error);
+    }
+  }
+
+  // ツールの現在の色を取得（上書きされた色または初期色）
+  async getToolColor(toolId) {
+    try {
+      const key = `tool_color_${toolId}`;
+      const result = await chrome.storage.local.get([key]);
+
+      // 上書きされた色があればそれを返す
+      if (result[key]) {
+        return result[key];
+      }
+
+      // なければ初期色を返す
+      const defaultColors = {
+        '0': '#000000',  // 黒
+        '1': '#ff0000',  // 赤
+        '2': '#0000ff',  // 青
+        '3': '#ffff00',  // 黄
+        '4': '#ffffff',  // 白
+        '5': '#00c000',  // 緑
+        '6': '#00ffff',  // シアン
+        '7': '#ff00ff',  // マゼンタ
+        '8': '#ff8000',  // オレンジ
+        '9': '#808080'   // グレー
+      };
+
+      return defaultColors[toolId] || '#000000';
+    } catch (error) {
+      console.error('ツール色取得エラー:', error);
+      // エラー時は初期色を返す
+      const defaultColors = {
+        '0': '#000000',  // 黒
+        '1': '#ff0000',  // 赤
+        '2': '#0000ff',  // 青
+        '3': '#ffff00',  // 黄
+        '4': '#ffffff',  // 白
+        '5': '#00c000',  // 緑
+        '6': '#00ffff',  // シアン
+        '7': '#ff00ff',  // マゼンタ
+        '8': '#ff8000',  // オレンジ
+        '9': '#808080'   // グレー
+      };
+      return defaultColors[toolId] || '#000000';
+    }
+  }
+
+  // ツール色をローカルストレージに保存
+  async saveToolColor(toolId, color) {
+    try {
+      const key = `tool_color_${toolId}`;
+      await chrome.storage.local.set({ [key]: color });
+    } catch (error) {
+      console.error('ツール色保存エラー:', error);
+    }
+  }
+
+  // ツール色をローカルストレージから読み込み
+  async loadToolColors() {
+    try {
+      const toolIds = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+      const keys = toolIds.map(id => `tool_color_${id}`);
+      const result = await chrome.storage.local.get(keys);
+
+      // 各ツールの保存された色を適用
+      toolIds.forEach(toolId => {
+        const key = `tool_color_${toolId}`;
+        const savedColor = result[key];
+
+        if (savedColor) {
+          const toolElement = this.controlBar?.querySelector(`[data-tool="${toolId}"]`);
+          if (toolElement) {
+            this.updateToolColor(toolElement, savedColor);
+          }
+        }
+      });
+    } catch (error) {
+      console.error('ツール色読み込みエラー:', error);
+    }
+  }
+
+  // パレットの選択状態を更新
+  updatePaletteSelection() {
+    const palette = this.controlBar.querySelector('#colorPalette');
+    if (!palette) return;
+
+    const colorSwatches = palette.querySelectorAll('.color-swatch');
+    const toolOptions = palette.querySelectorAll('.tool-option');
+
+    // ★ 色の選択状態を更新（ペンツールの場合のみ）
+    colorSwatches.forEach(swatch => swatch.classList.remove('selected'));
+
+    if (this.currentEditingTool && this.getSlotToolType(this.currentEditingTool.dataset.tool) === 'pen') {
+      const currentSwatch = palette.querySelector(`[data-color="${this.currentColor}"]`);
+      if (currentSwatch) {
+        currentSwatch.classList.add('selected');
+      }
+    }
+
+    // ★ ツールの選択状態を更新
+    toolOptions.forEach(option => option.classList.remove('selected'));
+
+    if (this.currentEditingTool) {
+      const currentToolType = this.getSlotToolType(this.currentEditingTool.dataset.tool);
+      const currentToolOption = palette.querySelector(`[data-tool-type="${currentToolType}"]`);
+      if (currentToolOption) {
+        currentToolOption.classList.add('selected');
+      }
+    }
+
+    // スライダーの値も更新（表示のみ）
+    const opacitySlider = palette.querySelector('#opacitySlider');
+    const opacityValue = palette.querySelector('#opacityValue');
+    if (opacitySlider && opacityValue) {
+      const opacityPercent = Math.round(this.currentOpacity * 100);
+      opacitySlider.value = opacityPercent;
+      opacityValue.textContent = opacityPercent + '%';
+    }
+  }
+
+  // 色変更処理
+  async changeColor(color) {
+    this.currentColor = color;
+    this.canvasManager.setColor(color);
+
+    // ツールバーの状態を更新（既存ツールとのアクティブ連動は行わない）
+    this.updateBarState();
+
+    console.log(`タブ ${this.tabId} の色を ${color} に変更`);
   }
 
   setupChromeListeners() {
@@ -672,13 +1285,6 @@ class SharedDrawing {
   }
 
   // 描画設定
-  async changeColor(color) {
-    this.currentColor = color;
-    this.canvasManager.setColor(color);
-    this.updateBarState();
-    console.log(`タブ ${this.tabId} の色を ${color} に変更`);
-  }
-
   async changeOpacity(opacity) {
     this.currentOpacity = opacity;
     this.canvasManager.setOpacity(opacity);
@@ -696,8 +1302,34 @@ class SharedDrawing {
       console.error('描画設定保存エラー:', error);
     }
 
+    // ★ 描画状態に応じてアクティブツールを調整（大幅簡略化）
+    // 現在のアクティブツールはそのまま維持
+    // ユーザーが選択したスロットを尊重する
+
     this.updateBarState();
     console.log(`描画モードを ${enabled ? 'ON' : 'OFF'} に変更（全タブ共通）`);
+  }
+
+  // ★ 最初のペンスロットを探す
+  findFirstPenSlot() {
+    const slotIds = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    for (const slotId of slotIds) {
+      if (this.getSlotToolType(slotId) === 'pen') {
+        return slotId;
+      }
+    }
+    return '1'; // 見つからない場合はスロット1をデフォルト
+  }
+
+  // ★ 最初のカーソルスロットを探す
+  findFirstCursorSlot() {
+    const slotIds = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    for (const slotId of slotIds) {
+      if (this.getSlotToolType(slotId) === 'cursor') {
+        return slotId;
+      }
+    }
+    return '0'; // 見つからない場合はスロット0をデフォルト
   }
 
   clearCanvas() {
@@ -880,8 +1512,6 @@ class SharedDrawing {
     }
   }
 
-  // リモート
-
   // リモートからのRedo処理
   handleRemoteRedo() {
     // リモートからのRedoはRedoスタックから復元
@@ -904,6 +1534,28 @@ class SharedDrawing {
 
         this.updateUndoRedoButtons();
       }
+    }
+  }
+
+  // リモートからのストローク削除処理
+  handleRemoteStrokeRemoval(strokeId) {
+    // 該当するストロークを履歴から探して削除
+    let found = false;
+    for (let i = 0; i < this.canvasManager.strokes.length; i++) {
+      if (this.canvasManager.strokes[i].id === strokeId) {
+        // 自分のストロークではない場合のみ削除
+        if (!this.canvasManager.myStrokeIds.has(strokeId)) {
+          this.canvasManager.strokes.splice(i, 1);
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (found) {
+      // キャンバスを再描画
+      this.canvasManager.redrawAllStrokes();
+      console.log('リモートストローク削除完了:', strokeId);
     }
   }
 

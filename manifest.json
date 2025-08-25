@@ -22,16 +22,27 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["websocket.js", "canvas.js", "content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "websocket.js",
+        "canvas.js",
+        "content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["control-bar.html","images/pencil-cursor.png"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "control-bar.html",
+        "images/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "action": {

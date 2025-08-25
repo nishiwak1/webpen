@@ -30,8 +30,8 @@ class CanvasManager {
         document.documentElement.offsetHeight
       );
 
-      this.canvas.style.top = isBarVisible ? '60px' : '0px';
-      this.canvas.style.height = `${pageHeight - (isBarVisible ? 60 : 0)}px`;
+      this.canvas.style.top = isBarVisible ? '32px' : '0px';
+      this.canvas.style.height = `${pageHeight - (isBarVisible ? 32 : 0)}px`;
       this.resize(isBarVisible);
     }
   }
@@ -58,10 +58,10 @@ class CanvasManager {
 
     const canvasStyles = `
       position: fixed !important;
-      top: ${isBarVisible ? '60px' : '0px'} !important;
+      top: ${isBarVisible ? '32px' : '0px'} !important;
       left: 0 !important;
       width: 100vw !important;
-      height: ${pageHeight - (isBarVisible ? 60 : 0)}px !important;
+      height: ${pageHeight - (isBarVisible ? 32 : 0)}px !important;
       z-index: 2147483646 !important;
       pointer-events: none !important;
       background: transparent !important;
@@ -141,7 +141,7 @@ class CanvasManager {
 
     this.canvas.width = window.innerWidth;
     // ページ全体の高さに設定（バーの高さを考慮）
-    this.canvas.height = pageHeight - (isBarVisible ? 60 : 0);
+    this.canvas.height = pageHeight - (isBarVisible ? 32 : 0);
 
     this.setupContext();
 
@@ -501,7 +501,7 @@ class CanvasManager {
       );
 
       // 現在のキャンバス高さと比較
-      if (this.canvas && Math.abs(this.canvas.height - (currentHeight - (isBarVisible ? 60 : 0))) > 10) {
+      if (this.canvas && Math.abs(this.canvas.height - (currentHeight - (isBarVisible ? 32 : 0))) > 10) {
         console.log('ページ高さ変化を検知:', currentHeight);
         this.resize(isBarVisible);
       }
