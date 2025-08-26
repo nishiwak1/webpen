@@ -219,21 +219,7 @@ class SharedDrawing {
 
   updateBarState() {
     if (!this.controlBar || !this.controlBar.innerHTML) return;
-
-    const expandedContent = this.controlBar.querySelector('#expanded-content');
-    const minimizedContent = this.controlBar.querySelector('#minimized-content');
     const currentRoomCode = this.controlBar.querySelector('#current-room-code');
-
-    // 展開/最小化の表示切り替え
-    if (expandedContent && minimizedContent) {
-      if (this.isBarVisible) {
-        expandedContent.classList.remove('hidden');
-        minimizedContent.classList.add('hidden');
-      } else {
-        expandedContent.classList.add('hidden');
-        minimizedContent.classList.add('hidden');
-      }
-    }
 
     // ★ ツールボタンの状態更新（修正版：ツールIDベースで判定）
     const toolBtns = this.controlBar.querySelectorAll('.slot-tool');
