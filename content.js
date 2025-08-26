@@ -55,6 +55,12 @@ class SharedDrawing {
     if (this.isInitialized) return;
 
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('webpen') === 'true') {
+        console.log('白紙ページを検出 - UIバーを自動表示');
+        this.isBarVisible = true;
+        await chrome.storage.local.set({ isBarVisible: true });
+      }
       // グローバル設定を読み込み（UI表示状態 + 描画モード）
       const result = await chrome.storage.local.get(['isBarVisible', 'isDrawingEnabled']);
 
