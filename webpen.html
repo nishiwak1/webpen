@@ -8,6 +8,9 @@
       padding: 0;
       box-sizing: border-box;
     }
+    #control-bar svg,{
+      filter: brightness(0) invert(1);
+    }
 
     #shared-drawing-control-bar body,
     .control-bar-container body {
@@ -111,6 +114,15 @@
     /* 戻る・進むボタン */
     .slot-undo, .slot-redo {
       font-size: 20px;  /* 大きく */
+    }
+
+    /* 新規ページボタン */
+    .slot-newpage {
+      position: relative;
+    }
+    
+    .slot-newpage:hover {
+      background: rgba(76, 175, 80, 0.2);  /* 緑っぽく */
     }
 
     /* ---------------------------------------------------------------------------- */
@@ -225,7 +237,7 @@
     
     .slot-close {
       font-size: 20px;
-      width: 40px;  /* 少し広め */
+      width: 40px;  /* 少し広く */
     }
     
     .slot-close:hover {
@@ -559,6 +571,11 @@
     <!-- 中央の伸縮スペース -->
     <div style="flex: 1;"></div>
 
+    <!-- 新規ページボタン -->
+    <button class="slot slot-whiteboard" id="whiteboard-btn" title="新規白紙ページ">
+      <img src="" class="slot-icon" data-icon="whiteboard" alt="新規ページ">
+    </button>
+
     <div class="separator"></div>
 
     <!-- 部屋管理（右寄せ） -->
@@ -615,11 +632,14 @@
         <div class="tool-option" data-tool-type="pen" title="ペン">
           <img src="" class="tool-icon" data-icon="pen" alt="ペン">
         </div>
-        <div class="tool-option" data-tool-type="eraser-line" title="消しゴム">
-          <img src="" class="tool-icon" data-icon="eraser-line" alt="消しゴム">
+        <div class="tool-option" data-tool-type="pen-line" title="線ペン">
+          <img src="" class="tool-icon" data-icon="pen-line" alt="線ペン">
         </div>
-        <div class="tool-option" data-tool-type="eraser" title="線ごと消しゴム">
-          <img src="" class="tool-icon" data-icon="eraser" alt="線ごと消しゴム">
+        <div class="tool-option" data-tool-type="eraser" title="消しゴム">
+          <img src="" class="tool-icon" data-icon="eraser" alt="消しゴム">
+        </div>
+        <div class="tool-option" data-tool-type="eraser-line" title="線ごと消しゴム">
+          <img src="" class="tool-icon" data-icon="eraser-line" alt="線ごと消しゴム">
         </div>
         <div class="tool-option" data-tool-type="brush" title="ブラシ">
           🖌️

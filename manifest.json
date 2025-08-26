@@ -39,6 +39,7 @@
     {
       "resources": [
         "webpen.html",
+        "webpen-whiteboard.html",
         "images/*"
       ],
       "matches": [

@@ -60,5 +60,16 @@ chrome.action.onClicked.addListener(async (tab) => {
     chrome.tabs.reload(tab.id);
   }
 });
-
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'CREATE_NEW_TAB') {
+    chrome.tabs.create({
+      url: message.url,
+      active: true
+    }, (tab) => {
+      console.log('新規白紙ページが作成されました:', tab.id);
+      sendResponse({ success: true, tabId: tab.id });
+    });
+    return true; // 非同期レスポンスを示す
+  }
+});
 console.log('background.js 読み込み完了');

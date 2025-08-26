@@ -154,9 +154,11 @@ class SharedDrawing {
         'arrow-forward': 'images/arrow-forward.svg',
         'cursor': 'images/cursor.svg',
         'pen': 'images/pen.svg',
+        'pen-line': 'images/pen-line.svg',
         'eraser': 'images/eraser.svg',
         'eraser-line': 'images/eraser-line.svg',
         'trash': 'images/trash.svg',
+        'whiteboard': 'images/whiteboard.svg',
         'settings': 'images/settings.svg',
         'close': 'images/close.svg',
       };
@@ -442,6 +444,16 @@ class SharedDrawing {
 
     // カラーパレット関連イベント
     this.setupColorPaletteEvents();
+
+    // 新規ページ
+    const whiteboardBtn = self.controlBar.querySelector('#whiteboard-btn');
+    if (whiteboardBtn) {
+      whiteboardBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        self.createNewPage();
+      });
+    }
 
     // 部屋関連ボタン
     const roomInput = self.controlBar.querySelector('#room-input');
@@ -1311,6 +1323,20 @@ class SharedDrawing {
 
     this.updateBarState();
     console.log(`描画モードを ${enabled ? 'ON' : 'OFF'} に変更（全タブ共通）`);
+  }
+
+  // 白紙ページ作成
+  async createNewPage() {
+    try {
+      const webURL = 'https://nishiwak1.github.io/webpen/?webpen=true';
+
+      chrome.runtime.sendMessage({
+        type: 'CREATE_NEW_TAB',
+        url: webURL
+      });
+    } catch (error) {
+      console.error('新規ページ作成エラー:', error);
+    }
   }
 
   // ★ 最初のペンスロットを探す
