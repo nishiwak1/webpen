@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    #control-bar svg,{
+      filter: brightness(0) invert(1);
+    }
+
+    #shared-drawing-control-bar body,
+    .control-bar-container body {
+      width: 100%;
+      height: 32px;
+      overflow: hidden;
+      background: transparent;
+    }
+    
+    
+    /* メインコンテナ - パディングなし */
+    .grid-container {
+      display: flex;
+      align-items: stretch;  /* 子要素を縦いっぱいに */
+      height: 32px;
+      padding: 0 0 0 4px;  /* 左側のみ4pxパディング */
+      gap: 0;
+      background: #262626;
+      color: white;
+      pointer-events: auto;
+    }
+    
+    /* 基本スロット（32px高さフル使用） */
+    .slot {
+      width: 32px;  /* 正方形に */
+      height: 32px;  /* フルハイト */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;  /* 枠なし */
+      border: none;  /* ボーダー削除 */
+      cursor: pointer;
+      transition: background 0.15s;
+      padding: 0;
+      color: white;
+      font-size: 18px;  /* アイコン拡大 */
+      position: relative;
+    }
+    
+    .slot:hover:not(:disabled) {
+      background: rgba(255,255,255,0.1);
+    }
+    
+    .slot:active:not(:disabled) {
+      background: rgba(255,255,255,0.2);
+    }
+    
+    .slot:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* アイコンスロット */
+    .slot-icon {
+      width: 20px;  /* 14px → 20px */
+      height: 20px;
+    }
+    
+    /* 36px,ちょっとだけ大きい幅スロット */
+    .slot-36px {
+      width: 36px;
+    }
+    
+    /* 64px,2枠分の幅スロット */
+    .slot-double {
+      width: 64px;  /* 2スロット分 */
+    }
+    /* 96px,3枠分の幅スロット */
+    .slot-triple {
+      width: 96px;  /* 3スロット分 */
+    }
+    /* 128px,4枠分の幅スロット（部屋コード用） */
+    .slot-force {
+      width: 128px;  /* 3スロット分 */
+    }
+
+
+
+
+    /* ---------------------------------------------------------------------------- */
+    /* 個別CSS */
+    /* ---------------------------------------------------------------------------- */
+
+    /* セパレーター（32px幅の1スロット、中央に線） */
+    .separator {
+      width: 32px;  /* 1スロット分 */
+      height: 32px;  /* フルハイト */
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .separator::after {
+      content: '';
+      width: 2px;
+      height: 20px;
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* 戻る・進むボタン */
+    .slot-undo, .slot-redo {
+      font-size: 20px;  /* 大きく */
+    }
+
+    /* 新規ページボタン */
+    .slot-newpage {
+      position: relative;
+    }
+    
+    .slot-newpage:hover {
+      background: rgba(76, 175, 80, 0.2);  /* 緑っぽく */
+    }
+
+    /* ---------------------------------------------------------------------------- */
+    /* 部屋 */
+    /* ---------------------------------------------------------------------------- */
+    .room-input {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      border: none;
+      color: white;
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      outline: none;
+      padding: 0 4px;
+    }
+    
+    .room-input::placeholder {
+      color: rgba(255,255,255,0.3);
+    }
+    .room-status {
+      color: white;
+      font-size: 11px;
+      font-weight: bold;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+
+    #room-current {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 2px;
+    }
+    
+    .slot-join {
+      font-size: 11px;  /* 少し大きく */
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+    
+    .slot-join:hover {
+      background: rgba(76, 175, 80, 0.2);  /* 緑っぽく */
+    }
+    
+
+    .slot-leave {
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+    
+    .slot-leave:hover {
+      background: rgba(255, 152, 0, 0.2);  /* オレンジ系 */
+    }
+
+    
+    /* ---------------------------------------------------------------------------- */
+    /* */
+    /* ---------------------------------------------------------------------------- */
+    
+    /* ツールスロット（色付き） - 完全にクラスベースのみ */
+    .slot-tool {
+      position: relative;
+      background: transparent !important; /* 強制的に背景をリセット */
+    }
+    
+    /* アクティブ状態のスタイルを最優先で適用 */
+    .slot-tool.active {
+      background: rgba(255,255,255,0.15) !important;
+    }
+    
+    /* 疑似要素による下線を完全に無効化 */
+    .slot-tool::after {
+      display: none !important;
+      content: none !important;
+    }
+    
+    /* ホバー状態も明示的に制御 */
+    .slot-tool:hover:not(.active):not(:disabled) {
+      background: rgba(255,255,255,0.1) !important;
+    }
+    
+    .tool-indicator {
+      width: 20px;  /* 14px → 20px */
+      height: 20px;
+      border-radius: 50%;
+    }
+    
+    /* キーボードヒント（極小） */
+    .key-hint {
+      position: absolute;
+      bottom: 2px;
+      right: 3px;
+      font-size: 7px;
+      color: rgba(255,255,255,0.2);
+      pointer-events: none;
+      font-weight: bold;
+    }
+    
+    /* 設定・閉じるボタン */
+    .slot-settings {
+      font-size: 18px;
+    }
+    
+    .slot-settings:hover {
+      background: rgba(255,255,255,0.15);
+    }
+    
+    .slot-close {
+      font-size: 20px;
+      width: 40px;  /* 少し広く */
+    }
+    
+    .slot-close:hover {
+      background: rgba(255,0,0,0.2);
+    }
+
+    #shared-drawing-control-bar .hidden,
+    .grid-container.hidden {
+      display: none;
+    }
+
+    /* ---------------------------------------------------------------------------- */
+    /* カラーパレットポップアップ */
+    /* ---------------------------------------------------------------------------- */
+    .color-palette {
+      position: fixed;
+      width: 280px;
+      background: #2d2d2d;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      padding: 16px;
+      z-index: 2147483648;
+      color: white;
+      font-size: 13px;
+      user-select: none;
+      display: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .palette-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .palette-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: #ffffff;
+    }
+
+    .palette-close-btn {
+      background: none;
+      border: none;
+      color: #999;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+
+    .palette-close-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    /* ★ ツールグリッド */
+    .tool-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tool-option {
+      padding: 10px;
+      background: #404040;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      border: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+    }
+
+    .tool-option:hover {
+      background: #505050;
+      transform: translateY(-1px);
+    }
+
+    .tool-option.selected {
+      background: #5c5c5c;
+      border-color: #ffffff;
+      transform: scale(1.02);
+    }
+
+    .tool-option.selected::after {
+      content: ' ✓';
+      color: #ffffff;
+      font-weight: bold;
+    }
+
+    /* ツールグリッド */
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);  /* 2列 → 6列 */
+      gap: 6px;  /* colorグリッドと同じ */
+      margin-bottom: 16px;
+    }
+
+    .tool-option {
+      width: 36px;   /* colorスウォッチと同じサイズ */
+      height: 36px;
+      padding: 0;    /* パディングをリセット */
+      background: #404040;
+      border-radius: 6px;  /* colorスウォッチと同じ */
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+      font-size: 18px;  /* 絵文字サイズ調整 */
+      font-weight: normal;  /* 太字解除 */
+      border: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;  /* widthと同じに */
+      position: relative;
+    }
+
+    .tool-option:hover {
+      background: #505050;
+      transform: scale(1.1);  /* colorスウォッチと同じホバー効果 */
+    }
+
+    .tool-option.selected {
+      background: #5c5c5c;
+      border-color: #ffffff;
+      transform: scale(1.05);  /* colorスウォッチと同じ選択効果 */
+    }
+
+    .tool-option.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: bold;
+      text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+    }
+
+    /* カラーグリッド */
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .color-swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.1);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .color-swatch.selected {
+      border-color: #ffffff;
+      transform: scale(1.05);
+    }
+
+    .color-swatch.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+    }
+
+    /* 白色の場合のチェックマーク調整 */
+    .color-swatch[data-color="#ffffff"].selected::after {
+      color: #333;
+      text-shadow: none;
+    }
+
+    /* オプション設定 */
+    .palette-section {
+      margin-bottom: 16px;
+    }
+
+    .palette-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-label {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #cccccc;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* スライダー */
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .palette-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: #4d4d4d;
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .palette-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #ffffff;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s;
+    }
+
+    .palette-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .palette-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: #ffffff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .slider-value {
+      font-weight: 600;
+      color: #ffffff;
+      min-width: 35px;
+      text-align: right;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-container">
+    <!-- Undo/Redo -->
+    <button class="slot slot-1-5 slot-undo" id="undo-btn" title="元に戻す (Ctrl+Z)">
+      <img src="" class="slot-icon" data-icon="arrow-back" alt="戻る">
+    </button>
+    <button class="slot slot-1-5 slot-redo" id="redo-btn" title="やり直す (Ctrl+Y)">
+      <img src="" class="slot-icon" data-icon="arrow-forward" alt="進む">
+    </button>
+    
+    <div class="separator"></div>
+    
+    <!-- ツールスロット（左寄せ） -->
+    <button class="slot slot-tool active" data-tool="0" data-tool-type="cursor" title="カーソルモード (1)">
+      <img src="" class="slot-icon" data-icon="cursor" alt="カーソル">
+      <span class="key-hint">1</span>
+    </button>
+    <button class="slot slot-tool" data-tool="1" data-tool-type="pen" title="黒ペン (2)">
+      <span class="tool-indicator" style="background: #000000;"></span>
+      <span class="key-hint">2</span>
+    </button>
+    <button class="slot slot-tool" data-tool="2" data-tool-type="pen" title="赤ペン (3)">
+      <span class="tool-indicator" style="background: #ff0000;"></span>
+      <span class="key-hint">3</span>
+    </button>
+    <button class="slot slot-tool" data-tool="3" data-tool-type="pen" title="青ペン (4)">
+      <span class="tool-indicator" style="background: #0000ff;"></span>
+      <span class="key-hint">4</span>
+    </button>
+    <button class="slot slot-tool" data-tool="4" data-tool-type="pen" title="黄マーカー (5)">
+      <span class="tool-indicator" style="background: #ffff00;"></span>
+      <span class="key-hint">5</span>
+    </button>
+    <button class="slot slot-tool" data-tool="5" data-tool-type="pen" title="白ペン (6)">
+      <span class="tool-indicator" style="background: #ffffff; border: 1px solid #666;"></span>
+      <span class="key-hint">6</span>
+    </button>
+    <button class="slot slot-tool" data-tool="6" data-tool-type="pen" title="緑ペン (7)">
+      <span class="tool-indicator" style="background: #00c000;"></span>
+      <span class="key-hint">7</span>
+    </button>
+    <button class="slot slot-tool" data-tool="7" data-tool-type="pen" title="シアンペン (8)">
+      <span class="tool-indicator" style="background: #00ffff;"></span>
+      <span class="key-hint">8</span>
+    </button>
+    <button class="slot slot-tool" data-tool="8" data-tool-type="pen" title="マゼンタペン (9)">
+      <span class="tool-indicator" style="background: #ff00ff;"></span>
+      <span class="key-hint">9</span>
+    </button>
+    <button class="slot slot-tool" data-tool="9" data-tool-type="pen" title="オレンジペン (`)">
+      <span class="tool-indicator" style="background: #ff8000;"></span>
+      <span class="key-hint">`</span>
+    </button>
+    
+    <div class="separator"></div>
+    
+    <!-- クリア -->
+    <button class="slot slot-clear" id="clear-btn" title="全消去">
+      <img src="" class="slot-icon" data-icon="trash" alt="クリア">
+    </button>
+    
+    <!-- 中央の伸縮スペース -->
+    <div style="flex: 1;"></div>
+
+    <!-- 新規ページボタン -->
+    <button class="slot slot-whiteboard" id="whiteboard-btn" title="新規白紙ページ">
+      <img src="" class="slot-icon" data-icon="whiteboard" alt="新規ページ">
+    </button>
+
+    <div class="separator"></div>
+
+    <!-- 部屋管理（右寄せ） -->
+    <div class="slot slot-force">
+      <!-- 参加前の表示 -->
+      <div id="room-join">
+        <input type="text" class="room-input" id="room-input" 
+               placeholder="ROOMCODE" maxlength="8">
+      </div>
+
+      <!-- 参加後の表示（初期は非表示） -->
+      <div id="room-current" class="hidden">
+        <span id="current-room-code" class="room-status"></span>
+      </div>
+    </div>
+
+    <!-- JOIN/LEAVEボタンの入れ替え表示 -->
+    <button class="slot slot-double slot-join" id="join-btn" title="参加/作成">
+      JOIN
+    </button>
+    <button class="slot slot-double slot-leave hidden" id="leave-btn" title="退室">
+      LEAVE
+    </button>
+    
+    <div class="separator"></div>
+
+    <!-- 設定ボタン -->
+    <button class="slot slot-settings" id="settings-btn" title="設定">
+      <img src="" class="slot-icon" data-icon="settings" alt="設定">
+    </button>
+    
+    <!-- 閉じる -->
+    <button class="slot slot-close" id="close-btn" title="終了">
+      ×
+    </button>
+  </div>
+
+  <!-- カラーパレットポップアップ -->
+  <div class="color-palette" id="colorPalette">
+    <div class="palette-header">
+      <div class="palette-title">PALETTE</div>
+      <button class="palette-close-btn" id="paletteCloseBtn">
+          <img src="" data-icon="close" alt="閉じる">
+      </button>
+    </div>
+
+    <!-- ツールセクション -->
+    <div class="palette-section">
+      <div class="section-label">TOOL</div>
+      <div class="tool-grid">
+        <div class="tool-option" data-tool-type="cursor" title="カーソルモード">
+          <img src="" class="tool-icon" data-icon="cursor" alt="ペン">
+        </div>
+        <div class="tool-option" data-tool-type="pen" title="ペン">
+          <img src="" class="tool-icon" data-icon="pen" alt="ペン">
+        </div>
+        <div class="tool-option" data-tool-type="pen-line" title="線ペン">
+          <img src="" class="tool-icon" data-icon="pen-line" alt="線ペン">
+        </div>
+        <div class="tool-option" data-tool-type="eraser" title="消しゴム">
+          <img src="" class="tool-icon" data-icon="eraser" alt="消しゴム">
+        </div>
+        <div class="tool-option" data-tool-type="eraser-line" title="線ごと消しゴム">
+          <img src="" class="tool-icon" data-icon="eraser-line" alt="線ごと消しゴム">
+        </div>
+        <div class="tool-option" data-tool-type="brush" title="ブラシ">
+          🖌️
+        </div>
+        <div class="tool-option" data-tool-type="spray" title="スプレー">
+          💨
+        </div>
+      </div>
+    </div>
+
+    <div class="palette-section">
+      <div class="section-label">COLOR</div>
+      <div class="color-grid">
+        <!-- 1行目：基本色 -->
+        <div class="color-swatch" data-color="#0080ff" style="background: #0080ff;"></div>
+        <div class="color-swatch" data-color="#00c000" style="background: #00c000;"></div>
+        <div class="color-swatch" data-color="#ffff00" style="background: #ffff00;"></div>
+        <div class="color-swatch" data-color="#ff8000" style="background: #ff8000;"></div>
+        <div class="color-swatch" data-color="#ff0000" style="background: #ff0000;"></div>
+        <div class="color-swatch" data-color="#ff00ff" style="background: #ff00ff;"></div>
+
+        <!-- 2行目：パステル調 -->
+        <div class="color-swatch" data-color="#00ffff" style="background: #00ffff;"></div>
+        <div class="color-swatch" data-color="#80ff80" style="background: #80ff80;"></div>
+        <div class="color-swatch" data-color="#ffff80" style="background: #ffff80;"></div>
+        <div class="color-swatch" data-color="#ffcc99" style="background: #ffcc99;"></div>
+        <div class="color-swatch" data-color="#ffcccc" style="background: #ffcccc;"></div>
+        <div class="color-swatch" data-color="#ffccff" style="background: #ffccff;"></div>
+
+        <!-- 3行目：無彩色 -->
+        <div class="color-swatch" data-color="#ffffff" style="background: #ffffff; border: 1px solid #666;"></div>
+        <div class="color-swatch" data-color="#cccccc" style="background: #cccccc;"></div>
+        <div class="color-swatch" data-color="#999999" style="background: #999999;"></div>
+        <div class="color-swatch" data-color="#666666" style="background: #666666;"></div>
+        <div class="color-swatch" data-color="#333333" style="background: #333333;"></div>
+        <div class="color-swatch" data-color="#000000" style="background: #000000;"></div>
+      </div>
+    </div>
+
+    <div class="palette-section">
+      <div class="section-label">Opacity</div>
+      <div class="slider-container">
+        <input type="range" class="palette-slider" id="opacitySlider" min="10" max="100" value="70">
+        <div class="slider-value" id="opacityValue">70%</div>
+      </div>
+    </div>
+
+    <div class="palette-section">
+      <div class="section-label">Pen Size</div>
+      <div class="slider-container">
+        <input type="range" class="palette-slider" id="penSizeSlider" min="1" max="20" value="4">
+        <div class="slider-value" id="penSizeValue">4px</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
