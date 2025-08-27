@@ -493,6 +493,13 @@
       text-align: right;
       font-size: 12px;
     }
+
+    /* ---------------------------------------------------------------------------- */
+    /* SVGの色調整 */
+    /* ---------------------------------------------------------------------------- */
+    .color-palette img{
+      filter: brightness(0) invert(1);
+    }
   </style>
 </head>
 <body id="webpen">
@@ -597,7 +604,7 @@
     
     <!-- 閉じる -->
     <button class="slot slot-close" id="close-btn" title="終了">
-      ×
+      <img src="" class="slot-icon" data-icon="close" alt="設定">
     </button>
   </div>
 

@@ -55,21 +55,17 @@ class SharedDrawing {
     if (this.isInitialized) return;
 
     try {
+
+      // タブ固有のデフォルト
+      this.isBarVisible = false;
+      this.isDrawingEnabled = false;
+
+      // 白紙ページ検出
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('webpen') === 'true') {
         console.log('白紙ページを検出 - UIバーを自動表示');
         this.isBarVisible = true;
         await chrome.storage.local.set({ isBarVisible: true });
-      }
-      // グローバル設定を読み込み（UI表示状態 + 描画モード）
-      const result = await chrome.storage.local.get(['isBarVisible', 'isDrawingEnabled']);
-
-      this.isBarVisible = result.isBarVisible !== false;
-      this.isDrawingEnabled = result.isDrawingEnabled !== false;
-
-      // UIが非表示なら描画をOFF
-      if (!this.isBarVisible) {
-        this.isDrawingEnabled = false;
       }
 
       // ★ 初期アクティブツールを0番スロットに設定
@@ -220,8 +216,7 @@ class SharedDrawing {
   updateBarState() {
     if (!this.controlBar || !this.controlBar.innerHTML) return;
     const currentRoomCode = this.controlBar.querySelector('#current-room-code');
-
-    // ★ ツールボタンの状態更新（修正版：ツールIDベースで判定）
+    // ツールボタンの状態更新
     const toolBtns = this.controlBar.querySelectorAll('.slot-tool');
     toolBtns.forEach(btn => {
       const toolId = btn.dataset.tool;
@@ -304,13 +299,6 @@ class SharedDrawing {
 
   async toggleBarVisibility(visible) {
     this.isBarVisible = visible;
-
-    try {
-      await chrome.storage.local.set({ isBarVisible: visible });
-    } catch (error) {
-      console.error('ストレージ保存エラー:', error);
-    }
-
     if (visible) {
       this.createControlBar();
       if (this.drawingStateBeforeMinimize !== null) {
@@ -326,68 +314,23 @@ class SharedDrawing {
     this.updateBodyPadding();
   }
 
-  async syncUIState(isBarVisible) {
-    console.log('UI状態同期受信:', this.isBarVisible, '->', isBarVisible);
-
-    try {
-      const result = await chrome.storage.local.get(['isDrawingEnabled']);
-      const latestDrawingMode = result.isDrawingEnabled !== false;
-
-      if (this.isBarVisible !== isBarVisible || this.isDrawingEnabled !== latestDrawingMode) {
-        this.isBarVisible = isBarVisible;
-        this.isDrawingEnabled = latestDrawingMode;
-
-        if (!this.isBarVisible) {
-          this.isDrawingEnabled = false;
-        }
-
-        this.canvasManager.setEnabled(this.isDrawingEnabled);
-
-        if (isBarVisible) {
-          this.createControlBar();
-          if (this.drawingStateBeforeMinimize !== null) {
-            await this.toggleDrawing(this.drawingStateBeforeMinimize);
-            this.drawingStateBeforeMinimize = null;
-          }
-        } else {
-          this.drawingStateBeforeMinimize = this.isDrawingEnabled;
-          await this.toggleDrawing(false);
-          if (this.controlBar) {
-            this.controlBar.remove();
-            this.controlBar = null;
-          }
-        }
-
-        this.updateBodyPadding();
-
-        if (this.controlBar) {
-          this.updateBarState();
-        }
-
-        console.log('UI状態同期完了:', isBarVisible);
-      }
-    } catch (error) {
-      console.error('UI状態同期エラー:', error);
-    }
-  }
-
   // ----------------------------------------
   // 3. イベント設定
   // ----------------------------------------
   setupControlBarEvents() {
     const self = this;
 
-    // ツールボタン（新しいツールパレットシステム）
+    // ツールボタン
     const toolBtns = self.controlBar.querySelectorAll('.slot-tool');
     toolBtns.forEach(btn => {
-      // 左クリック処理（修正版）
-      btn.addEventListener('click', async (e) => { // ★ asyncを追加
+      // 左クリック処理
+      btn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
 
         const toolId = btn.dataset.tool;
 
-        // ★ 保存されているツールタイプを確認
+        // 保存されているツールタイプを確認
         const currentToolType = this.getSlotToolType(toolId);
         console.log(`左クリック - ツール${toolId} - タイプ: ${currentToolType}`);
 
@@ -450,7 +393,6 @@ class SharedDrawing {
     // 部屋関連ボタン
     const roomInput = self.controlBar.querySelector('#room-input');
     const joinBtn = self.controlBar.querySelector('#join-btn');
-    const createBtn = self.controlBar.querySelector('#create-btn');
     const leaveBtn = self.controlBar.querySelector('#leave-btn');
 
     if (roomInput) {
@@ -476,15 +418,6 @@ class SharedDrawing {
       });
     }
 
-    if (createBtn) {
-      createBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const code = self.generateRoomCode();
-        self.joinRoom(code);
-      });
-    }
-
     if (leaveBtn) {
       leaveBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -492,51 +425,6 @@ class SharedDrawing {
         self.leaveRoom();
       });
     }
-
-    // 展開/最小化ボタン
-    const expandBtn = self.controlBar.querySelector('#expand-btn');
-    const minimizeBtn = self.controlBar.querySelector('#minimize-btn');
-
-    if (expandBtn) {
-      expandBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        self.toggleBarVisibility(true);
-      });
-    }
-
-    if (minimizeBtn) {
-      minimizeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        self.toggleBarVisibility(false);
-      });
-    }
-
-    // 描画切り替えボタン
-    const toggleDrawButton = self.controlBar.querySelector('#toggle-draw-btn');
-    if (toggleDrawButton) {
-      toggleDrawButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (!self.isBarVisible) {
-          return;
-        }
-
-        self.toggleDrawing(!self.isDrawingEnabled);
-      });
-    }
-
-    // 色選択ボタン
-    const colorBtns = self.controlBar.querySelectorAll('.color-btn');
-    colorBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        self.changeColor(btn.dataset.color);
-      });
-    });
 
     // Undo/Redoボタン
     const undoBtn = self.controlBar.querySelector('#undo-btn');
@@ -1127,9 +1015,6 @@ class SharedDrawing {
             case 'TOGGLE_BAR_VISIBILITY':
               this.toggleBarVisibility(message.visible);
               break;
-            case 'SYNC_UI_STATE':
-              this.syncUIState(message.isBarVisible);
-              break;
             case 'TOGGLE_DRAWING':
               this.toggleDrawing(message.isDrawing);
               break;
@@ -1260,43 +1145,13 @@ class SharedDrawing {
   // 5. 機能別メソッド
   // ----------------------------------------
 
-  // 部屋管理
-  async joinRoom(roomCode) {
-    if (roomCode.length !== 8) {
-      alert('8桁のコードを入力してください');
-      return;
-    }
 
-    this.currentRoom = roomCode;
-    this.wsManager.connect(roomCode);
-    this.updateBarState();
-
-    console.log(`タブ ${this.tabId} が部屋 ${roomCode} に参加`);
-  }
-
-  async leaveRoom() {
-    this.wsManager.disconnect();
-    this.currentRoom = null;
-    this.userCount = 0;
-    this.updateBarState();
-    console.log(`タブ ${this.tabId} が部屋から退出`);
-  }
-
-  generateRoomCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  }
 
   // 描画設定
   async changeOpacity(opacity) {
     this.currentOpacity = opacity;
     this.canvasManager.setOpacity(opacity);
     this.updateBarState();
-    console.log(`タブ ${this.tabId} の透明度を ${opacity} に変更`);
   }
 
   async toggleDrawing(enabled) {
@@ -1306,15 +1161,9 @@ class SharedDrawing {
     try {
       await chrome.storage.local.set({ isDrawingEnabled: enabled });
     } catch (error) {
-      console.error('描画設定保存エラー:', error);
     }
 
-    // ★ 描画状態に応じてアクティブツールを調整（大幅簡略化）
-    // 現在のアクティブツールはそのまま維持
-    // ユーザーが選択したスロットを尊重する
-
     this.updateBarState();
-    console.log(`描画モードを ${enabled ? 'ON' : 'OFF'} に変更（全タブ共通）`);
   }
 
   // 白紙ページ作成
@@ -1329,28 +1178,6 @@ class SharedDrawing {
     } catch (error) {
       console.error('新規ページ作成エラー:', error);
     }
-  }
-
-  // ★ 最初のペンスロットを探す
-  findFirstPenSlot() {
-    const slotIds = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    for (const slotId of slotIds) {
-      if (this.getSlotToolType(slotId) === 'pen') {
-        return slotId;
-      }
-    }
-    return '1'; // 見つからない場合はスロット1をデフォルト
-  }
-
-  // ★ 最初のカーソルスロットを探す
-  findFirstCursorSlot() {
-    const slotIds = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    for (const slotId of slotIds) {
-      if (this.getSlotToolType(slotId) === 'cursor') {
-        return slotId;
-      }
-    }
-    return '0'; // 見つからない場合はスロット0をデフォルト
   }
 
   clearCanvas() {
@@ -1380,6 +1207,37 @@ class SharedDrawing {
         roomId: this.currentRoom
       });
     }
+  }
+
+  // 部屋管理
+  async joinRoom(roomCode) {
+    if (roomCode.length !== 8) {
+      alert('8桁のコードを入力してください');
+      return;
+    }
+
+    this.currentRoom = roomCode;
+    this.wsManager.connect(roomCode);
+    this.updateBarState();
+
+    console.log(`タブ ${this.tabId} が部屋 ${roomCode} に参加`);
+  }
+
+  async leaveRoom() {
+    this.wsManager.disconnect();
+    this.currentRoom = null;
+    this.userCount = 0;
+    this.updateBarState();
+    console.log(`タブ ${this.tabId} が部屋から退出`);
+  }
+
+  generateRoomCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   }
 
   // ----------------------------------------

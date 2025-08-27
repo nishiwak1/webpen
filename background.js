@@ -3,12 +3,6 @@ console.log('background.js 読み込み開始');
 // 拡張機能インストール時
 chrome.runtime.onInstalled.addListener(() => {
   console.log('拡張機能がインストールされました');
-
-  // グローバル設定のみ初期化（UIの表示状態など）
-  chrome.storage.local.set({
-    isBarVisible: false,
-    isDrawingEnabled: true
-  });
 });
 
 // 拡張機能アイコンクリック時
