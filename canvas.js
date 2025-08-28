@@ -364,6 +364,7 @@ class CanvasManager {
     }
   }
 
+
   // ストローク削除処理
   eraseStroke(strokeId) {
     // 自分のストロークIDセットから削除
@@ -558,38 +559,38 @@ class CanvasManager {
   }
 
   draw(e) {
-  if (!this.isDrawing || !this.isEnabled) return;
+    if (!this.isDrawing || !this.isEnabled) return;
 
-  // 画面座標をキャンバス座標に変換
-  const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
+    // 画面座標をキャンバス座標に変換
+    const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
 
-  // 消しゴムモードの場合は消去処理
-  if (this.isEraserMode) {
-    this.eraseAtPoint(canvasPos, this.currentPenSize || 12);
-  } else {
-    // 通常の描画処理
-    this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity);
+    // 消しゴムモードの場合は消去処理
+    if (this.isEraserMode) {
+      this.eraseAtPoint(canvasPos, this.currentPenSize || 12);
+    } else {
+      // 通常の描画処理
+      this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity);
+    }
+
+    // キャンバス座標を履歴に追加
+    if (this.currentStroke) {
+      this.currentStroke.points.push(canvasPos);
+    }
+
+    this.lastPos = canvasPos;
   }
-
-  // キャンバス座標を履歴に追加
-  if (this.currentStroke) {
-    this.currentStroke.points.push(canvasPos);
-  }
-
-  this.lastPos = canvasPos;
-}
 
   eraseAtPoint(point, size) {
     if (!this.ctx || !point) return;
-    
+
     this.ctx.save();
     this.ctx.globalCompositeOperation = 'destination-out';
     this.ctx.globalAlpha = 1.0;
-    
+
     this.ctx.beginPath();
     this.ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
     this.ctx.fill();
-    
+
     this.ctx.restore();
   }
 
