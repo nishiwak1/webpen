@@ -68,6 +68,14 @@
       width: 20px;  /* 14px → 20px */
       height: 20px;
     }
+
+    /* ★ 新規追加：ペンツールアイコン専用スタイル */
+    .pen-tool-icon {
+      width: 20px;
+      height: 20px;
+      filter: none; /* フィルターを無効化（色はSVG内で制御） */
+      pointer-events: none; /* クリックイベント透過 */
+    }
     
     /* 36px,ちょっとだけ大きい幅スロット */
     .slot-36px {
@@ -113,7 +121,7 @@
 
     /* 戻る・進むボタン */
     .slot-undo, .slot-redo {
-      font-size: 20px;  /* 大きく */
+      font-size: 20px;  /* 大き */
     }
 
     /* 新規ページボタン */
@@ -122,7 +130,7 @@
     }
     
     .slot-newpage:hover {
-      background: rgba(76, 175, 80, 0.2);  /* 緑っぽく */
+      background: rgba(76, 175, 80, 0.2);  /* 緑っぽ */
     }
 
     /* ---------------------------------------------------------------------------- */
@@ -162,13 +170,13 @@
     }
     
     .slot-join {
-      font-size: 11px;  /* 少し大きく */
+      font-size: 11px;  /* 少し大き */
       font-weight: bold;
       letter-spacing: 0.5px;
     }
     
     .slot-join:hover {
-      background: rgba(76, 175, 80, 0.2);  /* 緑っぽく */
+      background: rgba(76, 175, 80, 0.2);  /* 緑っぽ */
     }
     
 
@@ -209,11 +217,8 @@
       background: rgba(255,255,255,0.1) !important;
     }
     
-    .tool-indicator {
-      width: 20px;  /* 14px → 20px */
-      height: 20px;
-      border-radius: 50%;
-    }
+    /* ★ 修正：tool-indicatorを削除（もう使用しない） */
+    /* .tool-indicator のスタイルは削除済み */
     
     /* キーボードヒント（極小） */
     .key-hint {
@@ -505,6 +510,57 @@
       text-align: right;
       font-size: 12px;
     }
+
+    /* ---------------------------------------------------------------------------- */
+    /* SVGの色調整 */
+    /* ---------------------------------------------------------------------------- */
+    .color-palette img{
+      filter: brightness(0) invert(1);
+    }
+
+    /* ペンツールアイコン（SVG直接読み込み方式） */
+    .pen-tool-icon {
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      /* フィルターは適用しない（SVG内で色変更済み） */
+      filter: none !important;
+    }
+
+    /* フォールバック用のペンアイコン（色丸） */
+    .pen-tool-fallback {
+      pointer-events: none;
+      display: inline-block;
+    }
+
+    /* 古いtool-indicatorを完全に無効化 */
+    .tool-indicator {
+      display: none !important;
+    }
+
+    /* ツールスロットの中央配置調整 */
+    .slot-tool {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    /* カラーパレット内ではフィルター無効化 */
+    .color-palette .pen-tool-icon,
+    .color-palette .pen-tool-fallback {
+      filter: none !important;
+    }
+
+    /* 読み込み失敗時の表示調整 */
+    .pen-tool-icon[src*="data:image/svg+xml"]:not([src=""]) {
+      display: inline-block;
+    }
+
+    .pen-tool-icon[src=""],
+    .pen-tool-icon:not([src]) {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -609,7 +665,7 @@
     
     <!-- 閉じる -->
     <button class="slot slot-close" id="close-btn" title="終了">
-      ×
+      <img src="" class="slot-icon" data-icon="close" alt="閉じる">
     </button>
   </div>
 
@@ -627,25 +683,13 @@
       <div class="section-label">TOOL</div>
       <div class="tool-grid">
         <div class="tool-option" data-tool-type="cursor" title="カーソルモード">
-          <img src="" class="tool-icon" data-icon="cursor" alt="ペン">
+          <img src="" class="tool-icon" data-icon="cursor" alt="カーソル">
         </div>
         <div class="tool-option" data-tool-type="pen" title="ペン">
           <img src="" class="tool-icon" data-icon="pen" alt="ペン">
         </div>
-        <div class="tool-option" data-tool-type="pen-line" title="線ペン">
-          <img src="" class="tool-icon" data-icon="pen-line" alt="線ペン">
-        </div>
-        <div class="tool-option" data-tool-type="eraser" title="消しゴム">
-          <img src="" class="tool-icon" data-icon="eraser" alt="消しゴム">
-        </div>
-        <div class="tool-option" data-tool-type="eraser-line" title="線ごと消しゴム">
-          <img src="" class="tool-icon" data-icon="eraser-line" alt="線ごと消しゴム">
-        </div>
-        <div class="tool-option" data-tool-type="brush" title="ブラシ">
-          🖌️
-        </div>
-        <div class="tool-option" data-tool-type="spray" title="スプレー">
-          💨
+        <div class="tool-option" data-tool-type="eraser-line" title="消しゴム">
+          <img src="" class="tool-icon" data-icon="eraser-line" alt="消しゴム">
         </div>
       </div>
     </div>
