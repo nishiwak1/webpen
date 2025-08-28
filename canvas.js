@@ -11,6 +11,9 @@ class CanvasManager {
     this.currentOpacity = 1;
     this.lastPos = { x: 0, y: 0 }; // キャンバス座標
     this.onDraw = onDrawCallback;
+    this.isEraserMode = false;
+    this.isErasing = false;
+    this.erasedStrokeIds = null;
 
     // 履歴管理用（キャンバス座標で統一）
     this.currentStroke = null;
@@ -208,6 +211,187 @@ class CanvasManager {
     this.ctx.strokeStyle = previousStroke;
   }
 
+  // ========================================
+  // 消しゴム機能
+  // ========================================
+  setEraserMode(enabled) {
+    this.isEraserMode = enabled || false;
+
+    if (enabled) {
+      // 消しゴムカーソルをSVGで作成
+      const eraserCursor = this.createEraserCursor();
+      this.setCursor(eraserCursor, 12, 12);
+      console.log('消しゴムカーソル設定完了');
+    } else {
+      this.clearCursor();
+      console.log('消しゴムカーソル解除');
+    }
+  }
+
+  // ★ 新機能：SVGベースの消しゴムカーソル作成
+  createEraserCursor() {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="#333333" stroke-width="2" opacity="0.8"/>
+        <circle cx="12" cy="12" r="2" fill="#333333" opacity="0.6"/>
+      </svg>
+    `;
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  }
+
+  // ★ 新機能：ペンカーソルをSVGから作成
+  createPenCursor() {
+    try {
+      const penSvgUrl = chrome.runtime.getURL('images/pen.svg');
+      return penSvgUrl;
+    } catch (error) {
+      console.warn('pen.svgが見つかりません、フォールバック作成:', error);
+      // フォールバックとしてSVGを直接作成
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+          <path d="M2 2l7.586 7.586"/>
+        </svg>
+      `;
+      return `data:image/svg+xml;base64,${btoa(svg)}`;
+    }
+  }
+
+  // ★ 新機能：汎用カーソル設定メソッド
+  setCursor(cursorUrl, hotspotX = 0, hotspotY = 0) {
+    // 既存のカーソルスタイルをクリア
+    this.clearCursor();
+
+    const cursorStyle = `url("${cursorUrl}") ${hotspotX} ${hotspotY}, auto`;
+
+    // CSSスタイルを作成して適用
+    const styleId = 'webpen-cursor-style';
+    let style = document.getElementById(styleId);
+
+    if (!style) {
+      style = document.createElement('style');
+      style.id = styleId;
+      document.head.appendChild(style);
+    }
+
+    style.textContent = `
+      body, body * {
+        cursor: ${cursorStyle} !important;
+      }
+      #webpen-control-bar,
+      #webpen-control-bar * {
+        cursor: default !important;
+      }
+      #webpen-canvas {
+        cursor: ${cursorStyle} !important;
+        pointer-events: auto !important;
+      }
+    `;
+
+    console.log(`カスタムカーソル設定: ${cursorUrl} (${hotspotX}, ${hotspotY})`);
+  }
+
+  // ★ 新機能：カーソルクリア
+  clearCursor() {
+    const styleId = 'webpen-cursor-style';
+    const style = document.getElementById(styleId);
+    if (style) {
+      style.remove();
+    }
+
+    // デフォルトカーソルに戻す
+    document.body.style.cursor = '';
+  }
+
+  // 消しゴムの開始処理
+  startErasing(e) {
+    if (!this.isEraserMode) return;
+
+    this.isErasing = true;
+    this.erasedStrokeIds = new Set(); // この消しゴム操作で削除したストロークID
+
+    const eraserPos = this.screenToCanvas(e.clientX, e.clientY);
+    this.checkAndEraseAtPosition(eraserPos);
+  }
+
+  // 消しゴムのドラッグ処理
+  continueErasing(e) {
+    if (!this.isErasing || !this.isEraserMode) return;
+
+    const eraserPos = this.screenToCanvas(e.clientX, e.clientY);
+    this.checkAndEraseAtPosition(eraserPos);
+  }
+
+  // 消しゴムの終了処理
+  stopErasing() {
+    if (!this.isErasing) return;
+    this.isErasing = false;
+
+    // 削除したストローク一覧をリセット
+    this.erasedStrokeIds = null;
+  }
+
+  // 指定位置でのストローク削除チェック
+  checkAndEraseAtPosition(pos) {
+    const eraserSize = 20; // 固定サイズ
+
+    for (let i = this.strokes.length - 1; i >= 0; i--) {
+      const stroke = this.strokes[i];
+
+      // 自分が描いた線のみチェック
+      if (!this.myStrokeIds.has(stroke.id)) continue;
+
+      // 既にこの消しゴム操作で削除済みの場合はスキップ
+      if (this.erasedStrokeIds && this.erasedStrokeIds.has(stroke.id)) continue;
+
+      // ストロークの点が消しゴム範囲内にあるかチェック
+      for (let point of stroke.points) {
+        const distance = Math.sqrt(
+          Math.pow(point.x - pos.x, 2) +
+          Math.pow(point.y - pos.y, 2)
+        );
+
+        if (distance <= eraserSize) {
+          // このストロークを削除
+          if (this.erasedStrokeIds) {
+            this.erasedStrokeIds.add(stroke.id);
+          }
+          this.eraseStroke(stroke.id);
+          break; // このストロークは削除済み
+        }
+      }
+    }
+  }
+
+
+  // ストローク削除処理
+  eraseStroke(strokeId) {
+    // 自分のストロークIDセットから削除
+    this.myStrokeIds.delete(strokeId);
+
+    // ストローク配列から削除
+    for (let i = this.strokes.length - 1; i >= 0; i--) {
+      if (this.strokes[i].id === strokeId) {
+        const removedStroke = this.strokes.splice(i, 1)[0];
+
+        // キャンバス再描画
+        this.redrawAllStrokes();
+
+        // ★ 修正：削除データをコールバックで通知
+        console.log('消しゴム削除をコールバックに通知:', strokeId);
+        this.onDraw({
+          type: 'erase',
+          strokeId: strokeId,
+          stroke: removedStroke // 削除されたストローク情報も送信
+        });
+
+        console.log('ストロークを消去:', strokeId);
+        break;
+      }
+    }
+  }
+
   setupEventListeners() {
     let longPressTimer = null;
     let isLongPressActive = false;
@@ -217,9 +401,15 @@ class CanvasManager {
     document.addEventListener('mousedown', (e) => {
       if (!this.isEnabled) return;
 
+      // 消しゴムモードの場合は即座に開始
+      if (this.isEraserMode) {
+        this.canvas.style.pointerEvents = 'auto';
+        this.startErasing(e);
+        return;
+      }
+
       longPressTimer = setTimeout(() => {
         isLongPressActive = true;
-
         // 描画モード突入：この瞬間だけキャンバスをアクティブ化
         this.canvas.style.pointerEvents = 'auto';
         document.body.style.overflow = 'hidden';
@@ -229,27 +419,53 @@ class CanvasManager {
     });
 
     document.addEventListener('mousemove', (e) => {
-      if (isLongPressActive && this.isDrawing) {
+      if (this.isEraserMode && this.isErasing) {
+        this.continueErasing(e);
+      } else if (isLongPressActive && this.isDrawing) {
         this.draw(e);
       }
     });
 
     document.addEventListener('mouseup', () => {
       clearTimeout(longPressTimer);
-      if (isLongPressActive) {
+
+      if (this.isEraserMode && this.isErasing) {
+        this.stopErasing();
+        this.canvas.style.pointerEvents = 'none';
+      } else if (isLongPressActive) {
         this.stopDrawing();
         isLongPressActive = false;
       }
     });
 
+
     // タッチイベント
     document.addEventListener('touchstart', (e) => {
       if (!this.isEnabled) return;
 
+      // 消しゴムモードの場合
+      if (this.isEraserMode) {
+        this.canvas.style.pointerEvents = 'auto';
+        document.body.style.overflow = 'hidden';
+        document.body.style.userSelect = 'none';
+
+        const interactiveElements = document.querySelectorAll('a, button, input, select, textarea');
+        interactiveElements.forEach(el => {
+          el.style.pointerEvents = 'none';
+          el.setAttribute('data-drawing-disabled', 'true');
+        });
+
+        const touch = e.touches[0];
+        this.startErasing({
+          clientX: touch.clientX,
+          clientY: touch.clientY
+        });
+        return;
+      }
+
+      // 既存の描画モード処理
       longPressTimer = setTimeout(() => {
         isLongPressActive = true;
-
-        // 描画モード突入
         this.canvas.style.pointerEvents = 'auto';
         document.body.style.overflow = 'hidden';
         document.body.style.userSelect = 'none';
@@ -269,7 +485,14 @@ class CanvasManager {
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
-      if (isLongPressActive && this.isDrawing) {
+      if (this.isEraserMode && this.isErasing) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        this.continueErasing({
+          clientX: touch.clientX,
+          clientY: touch.clientY
+        });
+      } else if (isLongPressActive && this.isDrawing) {
         e.preventDefault();
         const touch = e.touches[0];
         this.draw({
@@ -281,7 +504,19 @@ class CanvasManager {
 
     document.addEventListener('touchend', () => {
       clearTimeout(longPressTimer);
-      if (isLongPressActive) {
+
+      if (this.isEraserMode && this.isErasing) {
+        this.stopErasing();
+        this.canvas.style.pointerEvents = 'none';
+        document.body.style.overflow = '';
+        document.body.style.userSelect = '';
+
+        const disabledElements = document.querySelectorAll('[data-drawing-disabled]');
+        disabledElements.forEach(el => {
+          el.style.pointerEvents = '';
+          el.removeAttribute('data-drawing-disabled');
+        });
+      } else if (isLongPressActive) {
         this.stopDrawing();
         isLongPressActive = false;
       }
@@ -290,7 +525,10 @@ class CanvasManager {
     // マウスが画面外に出た場合
     document.addEventListener('mouseleave', () => {
       clearTimeout(longPressTimer);
-      if (isLongPressActive) {
+
+      if (this.isEraserMode && this.isErasing) {
+        this.stopErasing();
+      } else if (isLongPressActive) {
         this.stopDrawing();
         isLongPressActive = false;
       }
@@ -321,38 +559,38 @@ class CanvasManager {
   }
 
   draw(e) {
-  if (!this.isDrawing || !this.isEnabled) return;
+    if (!this.isDrawing || !this.isEnabled) return;
 
-  // 画面座標をキャンバス座標に変換
-  const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
+    // 画面座標をキャンバス座標に変換
+    const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
 
-  // 消しゴムモードの場合は消去処理
-  if (this.isEraserMode) {
-    this.eraseAtPoint(canvasPos, this.currentPenSize || 12);
-  } else {
-    // 通常の描画処理
-    this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity);
+    // 消しゴムモードの場合は消去処理
+    if (this.isEraserMode) {
+      this.eraseAtPoint(canvasPos, this.currentPenSize || 12);
+    } else {
+      // 通常の描画処理
+      this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity);
+    }
+
+    // キャンバス座標を履歴に追加
+    if (this.currentStroke) {
+      this.currentStroke.points.push(canvasPos);
+    }
+
+    this.lastPos = canvasPos;
   }
-
-  // キャンバス座標を履歴に追加
-  if (this.currentStroke) {
-    this.currentStroke.points.push(canvasPos);
-  }
-
-  this.lastPos = canvasPos;
-}
 
   eraseAtPoint(point, size) {
     if (!this.ctx || !point) return;
-    
+
     this.ctx.save();
     this.ctx.globalCompositeOperation = 'destination-out';
     this.ctx.globalAlpha = 1.0;
-    
+
     this.ctx.beginPath();
     this.ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
     this.ctx.fill();
-    
+
     this.ctx.restore();
   }
 
@@ -457,13 +695,14 @@ class CanvasManager {
     }
   }
 
+  // ★ 修正：setEnabledメソッドでカーソル管理を改善
   setEnabled(enabled) {
     this.isEnabled = enabled;
 
     if (enabled) {
-      // 描画ON時
-      const pencilCursorUrl = chrome.runtime.getURL('images/pencil-cursor.png');
-      document.body.style.cursor = `url("${pencilCursorUrl}") 0 16, crosshair`;
+      // 描画ON時：ペンカーソルを設定
+      const penCursor = this.createPenCursor();
+      this.setCursor(penCursor, 0, 24); // ペン先を考慮してhotspotを調整
 
       if (this.canvas) {
         this.canvas.style.pointerEvents = 'auto';
@@ -473,33 +712,33 @@ class CanvasManager {
         const style = document.createElement('style');
         style.id = 'drawing-mode-css';
         style.textContent = `
-    /* レイアウトに影響しない要素のみ制限 */
-    a, button, input, textarea, select, label, [onclick], [href] {
-      user-select: none !important;
-      pointer-events: none !important;
-    }
-    
-    /* 必要な要素は除外 */
-    html, body {
-      pointer-events: auto !important;
-      overflow: auto !important;
-    }
-    
-    #webpen-control-bar,
-    #webpen-control-bar * {
-      pointer-events: auto !important;
-    }
-    
-    #webpen-canvas {
-      pointer-events: auto !important;
-    }
-  `;
+          /* レイアウトに影響しない要素のみ制限 */
+          a, button, input, textarea, select, label, [onclick], [href] {
+            user-select: none !important;
+            pointer-events: none !important;
+          }
+          
+          /* 必要な要素は除外 */
+          html, body {
+            pointer-events: auto !important;
+            overflow: auto !important;
+          }
+          
+          #webpen-control-bar,
+          #webpen-control-bar * {
+            pointer-events: auto !important;
+          }
+          
+          #webpen-canvas {
+            pointer-events: auto !important;
+          }
+        `;
         document.head.appendChild(style);
       }
 
     } else {
-      // 描画OFF時
-      document.body.style.cursor = '';
+      // 描画OFF時：デフォルトカーソルに戻す
+      this.clearCursor();
 
       if (this.canvas) {
         this.canvas.style.pointerEvents = 'none';
