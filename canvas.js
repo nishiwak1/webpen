@@ -214,8 +214,11 @@ class CanvasManager {
   // ========================================
   // 消しゴム機能
   // ========================================
-  setEraserMode(enabled) {
+  setEraserMode(enabled, isLineEraser = false) {
     this.isEraserMode = enabled || false;
+    this.isLineEraser = isLineEraser || false;
+
+    console.log('消しゴムモード設定:', enabled, 'ライン消しゴム:', isLineEraser);
 
     if (enabled) {
       // 消しゴムカーソルをSVGで作成
@@ -227,7 +230,6 @@ class CanvasManager {
       console.log('消しゴムカーソル解除');
     }
   }
-
   // ★ 新機能：SVGベースの消しゴムカーソル作成
   createEraserCursor() {
     const svg = `
@@ -544,18 +546,28 @@ class CanvasManager {
     const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
     this.lastPos = canvasPos;
 
-    // 一意のIDを生成
-    const strokeId = `stroke_${Date.now()}_${this.strokeIdCounter++}`;
+    if (this.isEraserMode) {
+      // 消しゴムモードの場合
+      if (this.isLineEraser) {
+        // 線消しゴム：開始処理
+        this.startErasing(e);
+      } else {
+        // pixel消しゴム：即座に消去開始
+        this.eraseAtPoint(canvasPos, 20);
+      }
+    } else {
+      // 通常の描画：線の開始
+      const strokeId = `stroke_${Date.now()}_${this.strokeIdCounter++}`;
 
-    // 線の開始：キャンバス座標で管理
-    this.currentStroke = {
-      id: strokeId,
-      startTime: Date.now(),
-      color: this.currentColor,
-      opacity: this.currentOpacity,
-      points: [canvasPos], // キャンバス座標
-      isLocal: true // 自分が描いた線であることを示すフラグ
-    };
+      this.currentStroke = {
+        id: strokeId,
+        startTime: Date.now(),
+        color: this.currentColor,
+        opacity: this.currentOpacity,
+        points: [canvasPos],
+        isLocal: true
+      };
+    }
   }
 
   draw(e) {
@@ -564,17 +576,22 @@ class CanvasManager {
     // 画面座標をキャンバス座標に変換
     const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
 
-    // 消しゴムモードの場合は消去処理
     if (this.isEraserMode) {
-      this.eraseAtPoint(canvasPos, this.currentPenSize || 12);
+      if (this.isLineEraser) {
+        // 線消しゴム：線を検出して削除
+        this.checkAndEraseAtPosition(canvasPos);
+      } else {
+        // pixel消しゴム：指定位置を消去
+        this.eraseAtPoint(canvasPos, 20); // デフォルトサイズ20px
+      }
     } else {
       // 通常の描画処理
       this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity);
-    }
 
-    // キャンバス座標を履歴に追加
-    if (this.currentStroke) {
-      this.currentStroke.points.push(canvasPos);
+      // キャンバス座標を履歴に追加
+      if (this.currentStroke) {
+        this.currentStroke.points.push(canvasPos);
+      }
     }
 
     this.lastPos = canvasPos;
@@ -598,27 +615,24 @@ class CanvasManager {
     if (!this.isDrawing) return;
     this.isDrawing = false;
 
-    console.log('=== stopDrawing デバッグ ===');
-    console.log('currentStroke:', this.currentStroke);
-    console.log('currentStroke.points:', this.currentStroke?.points);
-    console.log('currentStroke.points.length:', this.currentStroke?.points?.length);
-
-    if (this.currentStroke && this.currentStroke.points.length > 1) {
-      // 自分が描いた線として記録
-      this.myStrokeIds.add(this.currentStroke.id);
-
-      // 履歴に追加
-      this.strokes.push({ ...this.currentStroke });
-
-      // そのまま送信（キャンバス座標で統一）
-      console.log('線データを送信します:', this.currentStroke);
-      this.onDraw({
-        type: 'stroke',
-        stroke: this.currentStroke
-      });
-      this.currentStroke = null;
+    if (this.isEraserMode) {
+      if (this.isLineEraser) {
+        // 線消しゴムの終了処理
+        this.stopErasing();
+      }
+      // pixel消しゴムは特別な終了処理は不要
     } else {
-      console.log('currentStrokeが存在しないか、点が1つ以下です');
+      // 通常の描画終了処理
+      if (this.currentStroke && this.currentStroke.points.length > 1) {
+        this.myStrokeIds.add(this.currentStroke.id);
+        this.strokes.push({ ...this.currentStroke });
+
+        this.onDraw({
+          type: 'stroke',
+          stroke: this.currentStroke
+        });
+        this.currentStroke = null;
+      }
     }
 
     // 描画モード終了
@@ -626,7 +640,6 @@ class CanvasManager {
     document.body.style.overflow = '';
     document.body.style.userSelect = '';
 
-    // 無効化していた要素を復元
     const disabledElements = document.querySelectorAll('[data-drawing-disabled]');
     disabledElements.forEach(el => {
       el.style.pointerEvents = '';
