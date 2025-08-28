@@ -8,16 +8,9 @@
       padding: 0;
       box-sizing: border-box;
     }
-    #control-bar svg,{
-      filter: brightness(0) invert(1);
-    }
 
-    #shared-drawing-control-bar body,
-    .control-bar-container body {
-      width: 100%;
-      height: 32px;
-      overflow: hidden;
-      background: transparent;
+    #webpen-control-bar .hidden{
+      display: none !important;
     }
     
     
@@ -136,11 +129,11 @@
     /* ---------------------------------------------------------------------------- */
     /* 部屋 */
     /* ---------------------------------------------------------------------------- */
-    .room-input {
+    #webpen-control-bar .room-input {
       width: 100%;
       height: 100%;
       background: transparent;
-      border: none;
+      border: none !important;
       color: white;
       text-align: center;
       font-size: 11px;
@@ -247,11 +240,6 @@
     
     .slot-close:hover {
       background: rgba(255,0,0,0.2);
-    }
-
-    #shared-drawing-control-bar .hidden,
-    .grid-container.hidden {
-      display: none;
     }
 
     /* ---------------------------------------------------------------------------- */
@@ -563,7 +551,7 @@
     }
   </style>
 </head>
-<body>
+<body id="webpen">
   <div class="grid-container">
     <!-- Undo/Redo -->
     <button class="slot slot-1-5 slot-undo" id="undo-btn" title="元に戻す (Ctrl+Z)">

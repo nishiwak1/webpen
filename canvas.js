@@ -6,6 +6,8 @@ class CanvasManager {
     this.isDrawing = false;
     this.isEnabled = true;
     this.currentColor = '#000000';
+    this.isEraserMode = false;
+    this.isLineEraser = false;
     this.currentOpacity = 1;
     this.lastPos = { x: 0, y: 0 }; // キャンバス座標
     this.onDraw = onDrawCallback;
@@ -96,6 +98,12 @@ class CanvasManager {
 
     // ページコンテンツの変化を監視
     this.observePageChanges(isBarVisible);
+  }
+
+  setEraserMode(enabled, isLineEraser = false) {
+    this.isEraserMode = enabled;
+    this.isLineEraser = isLineEraser;
+    console.log('消しゴムモード設定:', enabled, 'ライン消しゴム:', isLineEraser);
   }
 
   setupScrollListener() {
@@ -550,20 +558,39 @@ class CanvasManager {
   }
 
   draw(e) {
-    if (!this.isDrawing || !this.isEnabled) return;
+  if (!this.isDrawing || !this.isEnabled) return;
 
-    // 画面座標をキャンバス座標に変換
-    const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
+  // 画面座標をキャンバス座標に変換
+  const canvasPos = this.screenToCanvas(e.clientX, e.clientY);
 
-    // キャンバス上で線を描画（そのままの座標で）
+  // 消しゴムモードの場合は消去処理
+  if (this.isEraserMode) {
+    this.eraseAtPoint(canvasPos, this.currentPenSize || 12);
+  } else {
+    // 通常の描画処理
     this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity);
+  }
 
-    // キャンバス座標を履歴に追加
-    if (this.currentStroke) {
-      this.currentStroke.points.push(canvasPos);
-    }
+  // キャンバス座標を履歴に追加
+  if (this.currentStroke) {
+    this.currentStroke.points.push(canvasPos);
+  }
 
-    this.lastPos = canvasPos;
+  this.lastPos = canvasPos;
+}
+
+  eraseAtPoint(point, size) {
+    if (!this.ctx || !point) return;
+    
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = 'destination-out';
+    this.ctx.globalAlpha = 1.0;
+    
+    this.ctx.beginPath();
+    this.ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    this.ctx.restore();
   }
 
   stopDrawing() {
