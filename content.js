@@ -675,7 +675,7 @@ class SharedDrawing {
       });
       // ペン/消しゴムツールの場合は描画を有効に
       this.toggleDrawing(true);
-      
+
       // ★ ツールタイプに応じて設定
       if (this.isPenTool(toolType)) {
         // ペンツールの場合は色を適用
@@ -815,7 +815,6 @@ class SharedDrawing {
       return 'pen';
     }
   }
-
   // スロットのツールタイプを設定
   async setSlotToolType(slotId, toolType) {
     const slotElement = this.controlBar?.querySelector(`[data-tool="${slotId}"]`);
@@ -1354,8 +1353,8 @@ class SharedDrawing {
     } catch (error) {
       console.error('ツール色取得エラー:', error);
       const defaultColors = {
-        '0': '#000000',  '1': '#ff0000',  '2': '#0000ff',  '3': '#ffff00',  '4': '#ffffff',
-        '5': '#00c000',  '6': '#00ffff',  '7': '#ff00ff',  '8': '#ff8000',  '9': '#808080'
+        '0': '#000000', '1': '#ff0000', '2': '#0000ff', '3': '#ffff00', '4': '#ffffff',
+        '5': '#00c000', '6': '#00ffff', '7': '#ff00ff', '8': '#ff8000', '9': '#808080'
       };
       return defaultColors[toolId] || '#000000';
     }
