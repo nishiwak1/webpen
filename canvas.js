@@ -9,6 +9,7 @@ class CanvasManager {
     this.isEraserMode = false;
     this.isLineEraser = false;
     this.currentOpacity = 1;
+    this.currentPenSize = 3;
     this.lastPos = { x: 0, y: 0 }; // キャンバス座標
     this.onDraw = onDrawCallback;
     this.isEraserMode = false;
@@ -167,7 +168,7 @@ class CanvasManager {
     if (!this.ctx) return;
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
-    this.ctx.lineWidth = 3;
+    this.ctx.lineWidth = this.currentPenSize;
     this.ctx.strokeStyle = this.currentColor;
     this.ctx.globalAlpha = this.currentOpacity;
   }
@@ -189,9 +190,11 @@ class CanvasManager {
 
     const previousAlpha = this.ctx.globalAlpha;
     const previousStroke = this.ctx.strokeStyle;
+    const previousLineWidth = this.ctx.lineWidth;
 
     this.ctx.strokeStyle = stroke.color;
     this.ctx.globalAlpha = stroke.opacity;
+    this.ctx.lineWidth = stroke.penSize || 3; // ペンサイズを適用
     this.ctx.beginPath();
 
     // キャンバス座標をそのまま使用（座標変換不要）
@@ -209,6 +212,7 @@ class CanvasManager {
 
     this.ctx.globalAlpha = previousAlpha;
     this.ctx.strokeStyle = previousStroke;
+    this.ctx.lineWidth = previousLineWidth;
   }
 
   // ========================================
@@ -564,6 +568,7 @@ class CanvasManager {
         startTime: Date.now(),
         color: this.currentColor,
         opacity: this.currentOpacity,
+        penSize: this.currentPenSize,
         points: [canvasPos],
         isLocal: true
       };
@@ -586,7 +591,7 @@ class CanvasManager {
       }
     } else {
       // 通常の描画処理
-      this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity);
+      this.drawLine(this.lastPos, canvasPos, this.currentColor, this.currentOpacity, this.currentPenSize);
 
       // キャンバス座標を履歴に追加
       if (this.currentStroke) {
@@ -659,6 +664,7 @@ class CanvasManager {
       startTime: strokeData.startTime,
       color: strokeData.color || '#000000',
       opacity: strokeData.opacity || 1.0,
+      penSize: strokeData.penSize || 3,
       points: strokeData.points, // キャンバス座標として保存
       isLocal: false // 他のユーザーが描いた線
     };
@@ -670,12 +676,14 @@ class CanvasManager {
     this.drawStroke(stroke);
   }
 
-  drawLine(from, to, color, opacity = 1.0) {
+  drawLine(from, to, color, opacity = 1.0, penSize = null) {
     const previousAlpha = this.ctx.globalAlpha;
     const previousStroke = this.ctx.strokeStyle;
+    const previousLineWidth = this.ctx.lineWidth;
 
     this.ctx.strokeStyle = color;
     this.ctx.globalAlpha = opacity;
+    this.ctx.lineWidth = penSize || this.currentPenSize;
     this.ctx.beginPath();
     this.ctx.moveTo(from.x, from.y);
     this.ctx.lineTo(to.x, to.y);
@@ -683,6 +691,7 @@ class CanvasManager {
 
     this.ctx.globalAlpha = previousAlpha;
     this.ctx.strokeStyle = previousStroke;
+    this.ctx.lineWidth = previousLineWidth;
   }
 
   clear() {
@@ -705,6 +714,13 @@ class CanvasManager {
     this.currentOpacity = Math.max(0.1, Math.min(1.0, opacity));
     if (this.ctx) {
       this.ctx.globalAlpha = this.currentOpacity;
+    }
+  }
+
+  setPenSize(size) {
+    this.currentPenSize = Math.max(1, Math.min(20, size));
+    if (this.ctx) {
+      this.ctx.lineWidth = this.currentPenSize;
     }
   }
 

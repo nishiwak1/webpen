@@ -12,6 +12,7 @@ class SharedDrawing {
     this.isDrawingEnabled = true;
     this.currentColor = '#000000';
     this.currentOpacity = 1;
+    this.currentPenSize = 4;
 
     // ★ アクティブなツールIDを直接管理
     this.activeToolId = 'cursor'; // 初期値はカーソル
@@ -74,6 +75,7 @@ class SharedDrawing {
       this.canvasManager.setEnabled(this.isDrawingEnabled);
       this.canvasManager.setColor(this.currentColor);
       this.canvasManager.setOpacity(this.currentOpacity);
+      this.canvasManager.setPenSize(this.currentPenSize);
 
       // UI作成
       setTimeout(() => {
@@ -616,8 +618,10 @@ class SharedDrawing {
 
     if (penSizeSlider && penSizeValue) {
       penSizeSlider.addEventListener('input', () => {
-        penSizeValue.textContent = penSizeSlider.value + 'px';
-        console.log('Pen size changed:', penSizeSlider.value);
+        const newSize = parseInt(penSizeSlider.value);
+        penSizeValue.textContent = newSize + 'px';
+        this.changePenSize(newSize);
+        console.log('Pen size changed:', newSize);
       });
     }
 
@@ -1399,10 +1403,18 @@ class SharedDrawing {
 
     const opacitySlider = palette.querySelector('#opacitySlider');
     const opacityValue = palette.querySelector('#opacityValue');
+    const penSizeSlider = palette.querySelector('#penSizeSlider');
+    const penSizeValue = palette.querySelector('#penSizeValue');
+    
     if (opacitySlider && opacityValue) {
       const opacityPercent = Math.round(this.currentOpacity * 100);
       opacitySlider.value = opacityPercent;
       opacityValue.textContent = opacityPercent + '%';
+    }
+    
+    if (penSizeSlider && penSizeValue) {
+      penSizeSlider.value = this.currentPenSize;
+      penSizeValue.textContent = this.currentPenSize + 'px';
     }
   }
 
@@ -1412,6 +1424,13 @@ class SharedDrawing {
     this.canvasManager.setColor(color);
     this.updateBarState();
     console.log(`タブ ${this.tabId} の色を ${color} に変更`);
+  }
+
+  // ペンサイズ変更処理
+  changePenSize(size) {
+    this.currentPenSize = size;
+    this.canvasManager.setPenSize(size);
+    console.log(`タブ ${this.tabId} のペンサイズを ${size}px に変更`);
   }
 
   setupChromeListeners() {
@@ -1557,6 +1576,7 @@ class SharedDrawing {
         points: drawData.stroke.points,
         color: drawData.stroke.color,
         opacity: drawData.stroke.opacity,
+        penSize: drawData.stroke.penSize,
         startTime: drawData.stroke.startTime
       };
       console.log('描画データ送信:', payload);
@@ -1848,6 +1868,7 @@ class SharedDrawing {
           points: actionToRedo.stroke.points,
           color: actionToRedo.stroke.color,
           opacity: actionToRedo.stroke.opacity,
+          penSize: actionToRedo.stroke.penSize,
           startTime: actionToRedo.stroke.startTime
         });
       }
